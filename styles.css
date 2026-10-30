@@ -1,0 +1,260 @@
+:root {
+    color-scheme: light;
+    --bg: #f3f6f4;
+    --card: #ffffff;
+    --ink: #1c2b24;
+    --muted: #5d6d64;
+    --line: #d7e2db;
+    --green: #1f7a4d;
+    --green-dark: #155c39;
+    --danger: #9b2c2c;
+    --ok: #17663c;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+}
+
+.page {
+    width: min(1080px, calc(100% - 32px));
+    margin: 32px auto 48px;
+}
+
+.hero h1 {
+    margin: 4px 0 8px;
+    font-size: 36px;
+}
+
+.eyebrow,
+.lead,
+.message {
+    color: var(--muted);
+}
+
+.eyebrow {
+    margin: 0;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.lead {
+    margin: 0 0 20px;
+    max-width: 62ch;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 8px 24px rgba(28, 43, 36, 0.04);
+}
+
+.card h2 {
+    margin: 0 0 16px;
+    font-size: 20px;
+}
+
+.form-grid,
+.filter-bar {
+    display: grid;
+    gap: 12px;
+}
+
+.form-grid {
+    grid-template-columns: 156px 168px 220px 156px 64px auto;
+    justify-content: start;
+    align-items: end;
+}
+
+.actions {
+    grid-column: 6;
+    margin-left: 0;
+}
+
+#budget-locked {
+    height: 40px;
+    align-items: center;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f7faf8;
+    font-weight: 700;
+}
+
+#budget-locked:not([hidden]) {
+    display: flex;
+}
+
+.remaining-box {
+    grid-column: 1 / -1;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    border-radius: 10px;
+    background: #f3faf6;
+    border: 1px solid var(--line);
+    font-weight: 700;
+}
+
+.remaining-box.negative {
+    background: #fdecec;
+    color: var(--danger);
+}
+
+.remaining-box small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+input {
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0 12px;
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+}
+
+button {
+    height: 40px;
+    border: 0;
+    border-radius: 10px;
+    padding: 0 18px;
+    background: var(--green);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+button:hover {
+    background: var(--green-dark);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.list-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: end;
+    margin-bottom: 16px;
+}
+
+.list-head h2 {
+    margin: 0;
+}
+
+.filter-bar {
+    grid-template-columns: 180px auto;
+    align-items: end;
+}
+
+.table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+}
+
+th {
+    background: #f7faf8;
+    font-size: 13px;
+}
+
+tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+tfoot td {
+    font-weight: 700;
+    background: #f3faf6;
+    border-bottom: 0;
+}
+
+.col-index {
+    width: 64px;
+}
+
+.col-money {
+    width: 180px;
+    text-align: right;
+}
+
+td.negative {
+    color: var(--danger);
+}
+
+.empty {
+    color: var(--muted);
+    text-align: center;
+}
+
+.message {
+    min-height: 1.2em;
+    margin: 12px 0 0;
+}
+
+.message.error {
+    color: var(--danger);
+}
+
+.message.ok {
+    color: var(--ok);
+}
+
+@media (max-width: 800px) {
+
+    .form-grid,
+    .filter-bar,
+    .list-head {
+        grid-template-columns: 1fr;
+        display: grid;
+    }
+
+    .actions {
+        grid-column: auto;
+        margin-left: 0;
+    }
+
+    .actions button,
+    #export-button {
+        width: 100%;
+    }
+}

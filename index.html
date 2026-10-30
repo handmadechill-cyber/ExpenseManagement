@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sổ chi tiêu</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <p class="eyebrow">Expense Management</p>
+        <h1>Sổ chi tiêu</h1>
+        <p class="lead">
+          Nhập tổng tiền một lần. Số đó dùng cho 7 ngày kể từ ngày nhập. Còn lại bằng tổng trừ mọi khoản chi trong 7 ngày.
+          Dữ liệu lưu trên trình duyệt (localStorage), không cần máy chủ.
+        </p>
+      </header>
+ 
+      <section class="card" aria-labelledby="entry-title">
+        <h2 id="entry-title">Nhập chi tiêu</h2>
+        <form id="entry-form" class="form-grid">
+          <label>
+            Ngày
+            <input id="entry-date" name="date" type="date" required />
+          </label>
+          <label id="budget-field">
+            Tổng tiền
+            <input
+              id="budget-amount"
+              name="budget"
+              type="text"
+              inputmode="decimal"
+              placeholder="Dùng cho 7 ngày"
+            />
+            <span id="budget-locked" hidden></span>
+          </label>
+          <label class="span-2">
+            Nội dung
+            <input
+              id="entry-content"
+              name="content"
+              type="text"
+              maxlength="200"
+              placeholder="Ví dụ: Cơm trưa"
+              required
+            />
+          </label>
+          <label>
+            Số tiền (VND)
+            <input
+              id="entry-amount"
+              name="amount"
+              type="text"
+              inputmode="decimal"
+              placeholder="50000 hoặc 50.000"
+              required
+            />
+          </label>
+          <div class="actions">
+            <button id="save-button" type="submit">Lưu</button>
+          </div>
+          <div class="remaining-box" id="remaining-box">
+            <div>
+              <span>Còn lại</span>
+              <small id="period-note"></small>
+            </div>
+            <strong id="remaining-value">0</strong>
+          </div>
+        </form>
+        <p id="form-message" class="message" role="status"></p>
+      </section>
+<section class="card" aria-labelledby="list-title">
+        <div class="list-head">
+          <h2 id="list-title">Danh sách theo ngày</h2>
+          <div class="filter-bar">
+            <label>
+              Lọc theo ngày
+              <input id="filter-date" type="date" />
+            </label>
+            <button id="export-button" type="button">Xuất file</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-index">#</th>
+                <th>Nội dung</th>
+                <th class="col-money">Số tiền</th>
+              </tr>
+            </thead>
+            <tbody id="entry-rows"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">Đã chi ngày này</td>
+                <td id="spent-cell" class="col-money">0</td>
+              </tr>
+              <tr>
+                <td colspan="2">Đã chi 7 ngày</td>
+                <td id="period-spent-cell" class="col-money">0</td>
+              </tr>
+              <tr>
+                <td colspan="2">Còn lại</td>
+                <td id="remaining-cell" class="col-money">0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p id="list-message" class="message" role="status"></p>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
