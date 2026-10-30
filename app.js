@@ -42,7 +42,6 @@
     };
 
     const entryForm = document.querySelector("#entry-form");
-    const connectServerButton = document.querySelector("#connect-server-button");
     const serverStatus = document.querySelector("#server-status");
     const entryDate = document.querySelector("#entry-date");
     const budgetAmount = document.querySelector("#budget-amount");
@@ -96,6 +95,7 @@
     let backendConnecting = false;
     let backendWriteQueue = Promise.resolve();
     let backendWriteError = null;
+    let editingEntryIndex = null;
 
     function loadStore() {
         try {
@@ -694,7 +694,7 @@
         if (!items.length) {
             const row = document.createElement("tr");
             const cell = document.createElement("td");
-            cell.colSpan = 3;
+            cell.colSpan = 4;
             cell.className = "empty";
             cell.textContent = "Chưa có khoản chi cho ngày này.";
             row.append(cell);
@@ -706,14 +706,104 @@
             const indexCell = document.createElement("td");
             const contentCell = document.createElement("td");
             const amountCell = document.createElement("td");
+            const actionsCell = document.createElement("td");
             indexCell.textContent = String(index + 1);
-            contentCell.textContent = item.content;
-            amountCell.textContent = formatMoney(item.amount);
             amountCell.className = "col-money";
-            row.append(indexCell, contentCell, amountCell);
+            actionsCell.className = "col-actions";
+
+            if (editingEntryIndex === index) {
+                const contentInput = document.createElement("input");
+                contentInput.className = "inline-edit-input";
+                contentInput.maxLength = MAX_CONTENT_LENGTH;
+                contentInput.value = item.content;
+                contentInput.setAttribute("aria-label", "Sửa nội dung khoản chi");
+
+                const amountInput = document.createElement("input");
+                amountInput.className = "inline-edit-input";
+                amountInput.inputMode = "decimal";
+                amountInput.value = String(item.amount);
+                amountInput.setAttribute("aria-label", "Sửa số tiền khoản chi");
+                amountCell.append(amountInput);
+                contentCell.append(contentInput);
+
+                const saveButton = document.createElement("button");
+                saveButton.type = "button";
+                saveButton.dataset.entryAction = "save";
+                saveButton.dataset.entryIndex = String(index);
+                saveButton.textContent = "Lưu";
+
+                const cancelButton = document.createElement("button");
+                cancelButton.type = "button";
+                cancelButton.dataset.entryAction = "cancel";
+                cancelButton.dataset.entryIndex = String(index);
+                cancelButton.textContent = "Hủy";
+                actionsCell.append(saveButton, cancelButton);
+            } else {
+                contentCell.textContent = item.content;
+                amountCell.textContent = formatMoney(item.amount);
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.dataset.entryAction = "edit";
+                editButton.dataset.entryIndex = String(index);
+                editButton.textContent = "Sửa";
+                actionsCell.append(editButton);
+            }
+
+            actionsCell.classList.add("row-actions");
+            row.append(indexCell, contentCell, amountCell, actionsCell);
             entryRows.append(row);
         });
     }
+
+    entryRows.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-entry-action]");
+        if (!button) {
+            return;
+        }
+        const action = button.dataset.entryAction;
+        const index = Number(button.dataset.entryIndex);
+        if (action === "edit") {
+            editingEntryIndex = index;
+            loadEntries();
+            return;
+        }
+        if (action === "cancel") {
+            editingEntryIndex = null;
+            loadEntries();
+            return;
+        }
+
+        const row = button.closest("tr");
+        const content = normalizeContent(row.querySelector(".inline-edit-input[aria-label='Sửa nội dung khoản chi']").value);
+        const cents = parseMoney(row.querySelector(".inline-edit-input[aria-label='Sửa số tiền khoản chi']").value);
+        if (!content) {
+            setMessage(listMessage, "Nội dung không được để trống và tối đa 200 ký tự", "error");
+            return;
+        }
+        if (cents === null || cents <= 0) {
+            setMessage(listMessage, "Số tiền phải lớn hơn 0, tối đa 2 chữ số thập phân", "error");
+            return;
+        }
+
+        const dateItems = readDayItems(loadStore(), filterDate.value);
+        if (!dateItems[index]) {
+            setMessage(listMessage, "Không tìm thấy khoản chi để sửa", "error");
+            return;
+        }
+        dateItems[index] = { content, cents };
+        const store = loadStore();
+        writeDayItems(store, filterDate.value, dateItems);
+        saveStore(store);
+        button.disabled = true;
+        await backendWriteQueue;
+        editingEntryIndex = backendWriteError ? index : null;
+        loadEntries();
+        if (backendWriteError) {
+            setMessage(listMessage, "Đã sửa trên trình duyệt nhưng chưa đồng bộ lên server.", "error");
+        } else {
+            setMessage(listMessage, "Đã cập nhật khoản chi.", "ok");
+        }
+    });
 
     function renderSummary() {
         const payload = summarizeEntries(summaryDate.value);
@@ -940,6 +1030,7 @@
     });
 
     filterDate.addEventListener("change", () => {
+        editingEntryIndex = null;
         refreshSummaryDates();
         try {
             loadEntries();
@@ -952,6 +1043,7 @@
     });
 
     daySearchButton.addEventListener("click", () => {
+        editingEntryIndex = null;
         try {
             loadEntries();
             if (!summaryPanel.hidden) {
@@ -1029,7 +1121,6 @@
             return;
         }
         backendConnecting = true;
-        connectServerButton.disabled = true;
         appControls.forEach((control) => {
             control.disabled = true;
         });
@@ -1065,8 +1156,6 @@
         } finally {
             backendConnecting = false;
             backendInitialized = backendReady;
-            connectServerButton.disabled = false;
-            connectServerButton.hidden = backendReady;
             appControls.forEach((control) => {
                 control.disabled = !backendReady;
             });
@@ -1087,6 +1176,5 @@
     appControls.forEach((control) => {
         control.disabled = true;
     });
-    connectServerButton.addEventListener("click", initializeBackend);
     initializeBackend();
 })();

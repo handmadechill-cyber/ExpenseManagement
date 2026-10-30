@@ -16,7 +16,6 @@
       <section class="card" aria-labelledby="entry-title">
         <h2 id="entry-title">Nhập chi tiêu</h2>
                 <div class="file-storage">
-                    <button id="connect-server-button" type="button">Kết nối máy chủ</button>
                     <p id="server-status" class="message" role="status">Chưa kết nối máy chủ.</p>
                 </div>
                 <form id="entry-form" class="form-grid">
@@ -90,20 +89,21 @@
                 <th class="col-index">#</th>
                 <th>Nội dung</th>
                 <th class="col-money">Số tiền</th>
+                <th class="col-actions">Thao tác</th>
               </tr>
             </thead>
             <tbody id="entry-rows"></tbody>
             <tfoot>
               <tr>
-                <td colspan="2">Đã chi ngày này</td>
+                <td colspan="3">Đã chi ngày này</td>
                 <td id="spent-cell" class="col-money">0</td>
               </tr>
               <tr>
-                <td colspan="2">Đã chi 7 ngày</td>
+                <td colspan="3">Đã chi 7 ngày</td>
                 <td id="period-spent-cell" class="col-money">0</td>
               </tr>
               <tr>
-                <td colspan="2">Còn lại</td>
+                <td colspan="3">Còn lại</td>
                 <td id="remaining-cell" class="col-money">0</td>
               </tr>
             </tfoot>

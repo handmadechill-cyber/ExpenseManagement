@@ -72,12 +72,6 @@ body {
     margin-bottom: 16px;
 }
 
-.file-storage button {
-    height: 36px;
-    padding: 0 12px;
-    font-size: 14px;
-}
-
 .file-storage .message {
     min-height: 0;
     margin: 0;
@@ -376,6 +370,26 @@ tfoot td {
 .col-money {
     width: 180px;
     text-align: right;
+}
+
+.col-actions {
+    width: 150px;
+}
+
+.row-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.row-actions button {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 14px;
+}
+
+.inline-edit-input {
+    min-width: 120px;
 }
 
 td.negative {

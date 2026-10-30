@@ -12,7 +12,7 @@ const EXPENSE_FILE_NAME = "chi-tieu.txt.txt";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_BUCKET = "expense-data";
-const SUPABASE_DATA_FILE = "expense-store.txt";
+const SUPABASE_LEGACY_FILE = "expense-store.txt";
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -194,9 +194,50 @@ async function writeLocalStore(store) {
 }
 
 async function writeSupabaseStore(store) {
+    const budgetLines = [...store.periods]
+        .sort((left, right) => left.start.localeCompare(right.start))
+        .map((period) => `${period.start} ${formatAmount(period.budgetCents)}`);
+    await uploadSupabaseText(
+        "ngan-sach.txt.txt",
+        budgetLines.length ? `${budgetLines.join("\r\n")}\r\n` : ""
+    );
+
+    for (const [isoDate, items] of Object.entries(store.entries)) {
+        if (!isValidDate(isoDate)) {
+            continue;
+        }
+        const lines = items.map((item) => `${item.content} - ${formatAmount(item.cents)}`);
+        await uploadSupabaseText(
+            `${folderNameFromIso(isoDate)}/${EXPENSE_FILE_NAME}`,
+            lines.length ? `${lines.join("\r\n")}\r\n` : ""
+        );
+    }
+}
+
+function isMissingSupabaseObject(error) {
+    const message = String(error.message || "").toLowerCase();
+    return String(error.statusCode) === "404" &&
+        message.includes("object not found") &&
+        !message.includes("bucket");
+}
+
+async function downloadSupabaseText(objectPath) {
+    const { data, error } = await supabase.storage
+        .from(SUPABASE_BUCKET)
+        .download(objectPath);
+    if (error) {
+        if (isMissingSupabaseObject(error)) {
+            return null;
+        }
+        throw error;
+    }
+    return data.text();
+}
+
+async function uploadSupabaseText(objectPath, text) {
     const { error } = await supabase.storage
         .from(SUPABASE_BUCKET)
-        .upload(SUPABASE_DATA_FILE, Buffer.from(JSON.stringify(store, null, 2), "utf8"), {
+        .upload(objectPath, Buffer.from(text, "utf8"), {
             contentType: "text/plain; charset=utf-8",
             upsert: true,
         });
@@ -205,30 +246,90 @@ async function writeSupabaseStore(store) {
     }
 }
 
+function parseBudgetText(text) {
+    const periodsByDate = new Map();
+    for (const line of text.split(/\r?\n/)) {
+        const match = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/.exec(line.trim());
+        if (!match || !isValidDate(match[1])) {
+            continue;
+        }
+        const budgetCents = amountToCents(match[2]);
+        if (budgetCents > 0) {
+            periodsByDate.set(match[1], { start: match[1], budgetCents });
+        }
+    }
+    return [...periodsByDate.values()].sort((left, right) => left.start.localeCompare(right.start));
+}
+
+function parseExpenseText(text) {
+    return text.split(/\r?\n/).flatMap((line) => {
+        const separator = line.lastIndexOf(" - ");
+        if (separator <= 0) {
+            return [];
+        }
+        const content = line.slice(0, separator).trim();
+        const cents = amountToCents(line.slice(separator + 3));
+        if (!content || content.length > 200 || /[\r\n]/.test(content) || cents <= 0) {
+            return [];
+        }
+        return [{ content, cents }];
+    });
+}
+
+async function readSupabaseStore() {
+    const budgetText = await downloadSupabaseText("ngan-sach.txt.txt");
+    const { data: rootItems, error: listError } = await supabase.storage
+        .from(SUPABASE_BUCKET)
+        .list("", { limit: 1000 });
+    if (listError) {
+        throw listError;
+    }
+
+    const dateFolders = rootItems
+        .map((item) => item.name)
+        .filter((name) => isoFromFolderName(name));
+    const entries = {};
+    for (const folderName of dateFolders) {
+        const isoDate = isoFromFolderName(folderName);
+        const expenseText = await downloadSupabaseText(`${folderName}/${EXPENSE_FILE_NAME}`);
+        if (expenseText !== null) {
+            const items = parseExpenseText(expenseText);
+            if (items.length) {
+                entries[isoDate] = items;
+            }
+        }
+    }
+
+    const hasSplitData = budgetText !== null || dateFolders.length > 0;
+    if (hasSplitData) {
+        return {
+            periods: budgetText === null ? [] : parseBudgetText(budgetText),
+            entries,
+        };
+    }
+
+    const legacyText = await downloadSupabaseText(SUPABASE_LEGACY_FILE);
+    if (legacyText !== null) {
+        let legacyStore;
+        try {
+            legacyStore = normalizeStore(JSON.parse(legacyText));
+        } catch (error) {
+            throw new Error("File expense-store.txt cũ trên Supabase không hợp lệ");
+        }
+        await writeSupabaseStore(legacyStore);
+        return legacyStore;
+    }
+
+    const localStore = await readLocalStore();
+    await writeSupabaseStore(localStore);
+    return localStore;
+}
+
 async function readStore() {
     if (!supabase) {
         return readLocalStore();
     }
-
-    const { data, error } = await supabase.storage
-        .from(SUPABASE_BUCKET)
-        .download(SUPABASE_DATA_FILE);
-    if (error) {
-        const missingObject = String(error.statusCode) === "404" && /object not found/i.test(error.message || "");
-        if (!missingObject) {
-            throw error;
-        }
-
-        const localStore = await readLocalStore();
-        await writeSupabaseStore(localStore);
-        return localStore;
-    }
-
-    try {
-        return normalizeStore(JSON.parse(await data.text()));
-    } catch (parseError) {
-        throw new Error("File expense-store.txt trên Supabase không hợp lệ");
-    }
+    return readSupabaseStore();
 }
 
 async function writeStore(store) {
@@ -345,6 +446,6 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(PORT, HOST, () => {
-    const storage = supabase ? `Supabase Storage (${SUPABASE_BUCKET}/${SUPABASE_DATA_FILE})` : DATA_DIR;
+    const storage = supabase ? `Supabase Storage (${SUPABASE_BUCKET}/)` : DATA_DIR;
     console.log(`Expense app listening at http://${HOST}:${PORT}; storage: ${storage}`);
 });
