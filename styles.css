@@ -245,7 +245,7 @@ button:disabled {
 
 .summary-filter {
     display: grid;
-    grid-template-columns: minmax(0, 240px) auto;
+    grid-template-columns: minmax(0, 240px) auto auto;
     align-items: end;
     gap: 12px;
     margin-bottom: 16px;
@@ -271,8 +271,13 @@ button:disabled {
     font-weight: 600;
 }
 
-.summary-filter button {
+.summary-filter #summary-search-button {
     grid-column: 2;
+    grid-row: 1;
+}
+
+.summary-filter #summary-export-button {
+    grid-column: 3;
     grid-row: 1;
 }
 
@@ -293,7 +298,7 @@ button:disabled {
 }
 
 .filter-bar {
-    grid-template-columns: 180px auto;
+    grid-template-columns: minmax(0, 240px) auto auto;
     align-items: end;
     margin-bottom: 16px;
 }
@@ -316,10 +321,17 @@ button:disabled {
     grid-column: 1;
     grid-row: 2;
     width: 100%;
+    min-width: 0;
 }
 
-#day-panel .filter-bar button {
+#day-panel #day-search-button {
     grid-column: 2;
+    grid-row: 2;
+    white-space: nowrap;
+}
+
+#day-panel #export-button {
+    grid-column: 3;
     grid-row: 2;
     white-space: nowrap;
 }
@@ -402,12 +414,12 @@ td.negative {
     }
 
     .filter-bar {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         align-items: end;
     }
 
     #day-panel .filter-bar {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
     }
 
     #day-panel .filter-bar label {
@@ -415,14 +427,20 @@ td.negative {
     }
 
     .summary-filter {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         gap: 8px;
     }
 
     .summary-filter button {
         width: auto;
         white-space: nowrap;
-        padding: 0 12px;
+        padding: 0 8px;
+        font-size: 13px;
+    }
+
+    #day-panel .filter-bar button {
+        padding: 0 8px;
+        font-size: 13px;
     }
 
     .summary-range {

@@ -51,8 +51,10 @@
     const entryAmount = document.querySelector("#entry-amount");
     const saveButton = document.querySelector("#save-button");
     const filterDate = document.querySelector("#filter-date");
+    const daySearchButton = document.querySelector("#day-search-button");
     const exportButton = document.querySelector("#export-button");
     const summaryDate = document.querySelector("#summary-date");
+    const summarySearchButton = document.querySelector("#summary-search-button");
     const summaryExportButton = document.querySelector("#summary-export-button");
     const summaryRange = document.querySelector("#summary-range");
     const summaryRows = document.querySelector("#summary-rows");
@@ -74,8 +76,10 @@
     const appControls = [
         ...entryForm.elements,
         filterDate,
+        daySearchButton,
         exportButton,
         summaryDate,
+        summarySearchButton,
         summaryExportButton,
         dayTab,
         summaryTab,
@@ -947,7 +951,24 @@
         }
     });
 
+    daySearchButton.addEventListener("click", () => {
+        try {
+            loadEntries();
+            if (!summaryPanel.hidden) {
+                refreshSummaryDates();
+                renderSummary();
+            }
+        } catch (error) {
+            setMessage(listMessage, "Không tìm được dữ liệu theo ngày", "error");
+        }
+    });
+
     summaryDate.addEventListener("change", () => {
+        filterDate.value = summaryDate.value;
+        renderSummary();
+        loadEntries();
+    });
+    summarySearchButton.addEventListener("click", () => {
         filterDate.value = summaryDate.value;
         renderSummary();
         loadEntries();
