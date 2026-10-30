@@ -49,6 +49,15 @@
     const saveButton = document.querySelector("#save-button");
     const filterDate = document.querySelector("#filter-date");
     const exportButton = document.querySelector("#export-button");
+    const summaryDate = document.querySelector("#summary-date");
+    const summaryRange = document.querySelector("#summary-range");
+    const summaryRows = document.querySelector("#summary-rows");
+    const summaryTotal = document.querySelector("#summary-total");
+    const dayPanel = document.querySelector("#day-panel");
+    const summaryPanel = document.querySelector("#summary-panel");
+    const dayTab = document.querySelector("#day-tab");
+    const summaryTab = document.querySelector("#summary-tab");
+    const dayFilter = document.querySelector(".filter-bar");
     const entryRows = document.querySelector("#entry-rows");
     const spentCell = document.querySelector("#spent-cell");
     const periodSpentCell = document.querySelector("#period-spent-cell");
@@ -408,6 +417,46 @@
         return { ok: true, ...describeDate(loadStore(), isoDate) };
     }
 
+    function summarizeEntries(isoDate) {
+        if (!isValidIsoDate(isoDate)) {
+            return { ok: false, message: "Ngày tổng hợp không hợp lệ" };
+        }
+        const store = loadStore();
+        const period = findPeriod(isoDate, readPeriods(store));
+        if (!period) {
+            return { ok: true, period: null, entries: [], spent: 0 };
+        }
+        const today = todayIso();
+        const scheduledEnd = periodEnd(period.start);
+        const end = today < period.start
+            ? null
+            : today < scheduledEnd
+              ? today
+              : scheduledEnd;
+        const entries = [];
+        let spentCents = 0;
+        if (end) {
+            let cursor = period.start;
+            while (cursor <= end) {
+                readDayItems(store, cursor).forEach((item) => {
+                    entries.push({
+                        date: cursor,
+                        content: item.content,
+                        amount: centsToAmount(item.cents),
+                    });
+                    spentCents += item.cents;
+                });
+                cursor = addDays(cursor, 1);
+            }
+        }
+        return {
+            ok: true,
+            period: { start: period.start, end, scheduledEnd, budget: centsToAmount(period.budgetCents) },
+            entries,
+            spent: centsToAmount(spentCents),
+        };
+    }
+
     function exportEntries(isoDate) {
         if (!isValidIsoDate(isoDate)) {
             return { ok: false, message: "Ngày xuất không hợp lệ" };
@@ -562,6 +611,63 @@
         });
     }
 
+    function renderSummary() {
+        const payload = summarizeEntries(summaryDate.value);
+        summaryRows.replaceChildren();
+        summaryTotal.textContent = formatMoney(payload.spent || 0);
+        if (!payload.period) {
+            summaryRange.textContent = "Ngày này chưa có tổng tiền được nhập cho kỳ 7 ngày.";
+            summaryRows.append(createEmptyRow("Chưa có dữ liệu tổng hợp cho ngày này."));
+            return;
+        }
+        const period = payload.period;
+        if (period.end) {
+            summaryRange.textContent = `Kỳ ${formatVn(period.start)} - ${formatVn(period.end)} · Tổng tiền: ${formatMoney(period.budget)}`;
+        } else {
+            summaryRange.textContent = `Kỳ bắt đầu ${formatVn(period.start)} · Chưa tới ngày bắt đầu · Tổng tiền: ${formatMoney(period.budget)}`;
+        }
+        if (!payload.entries.length) {
+            summaryRows.append(createEmptyRow("Chưa có khoản chi trong khoảng thời gian này."));
+            return;
+        }
+        payload.entries.forEach((item) => {
+            const row = document.createElement("tr");
+            const dateCell = document.createElement("td");
+            const contentCell = document.createElement("td");
+            const amountCell = document.createElement("td");
+            dateCell.textContent = formatVn(item.date);
+            contentCell.textContent = item.content;
+            amountCell.textContent = formatMoney(item.amount);
+            amountCell.className = "col-money";
+            row.append(dateCell, contentCell, amountCell);
+            summaryRows.append(row);
+        });
+    }
+
+    function createEmptyRow(message) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 3;
+        cell.className = "empty";
+        cell.textContent = message;
+        row.append(cell);
+        return row;
+    }
+
+    function selectTab(selectedTab) {
+        const showSummary = selectedTab === summaryTab;
+        dayTab.setAttribute("aria-selected", String(!showSummary));
+        summaryTab.setAttribute("aria-selected", String(showSummary));
+        dayTab.tabIndex = showSummary ? -1 : 0;
+        summaryTab.tabIndex = showSummary ? 0 : -1;
+        dayPanel.hidden = showSummary;
+        summaryPanel.hidden = !showSummary;
+        dayFilter.hidden = showSummary;
+        if (showSummary) {
+            renderSummary();
+        }
+    }
+
     function applyLedger(payload) {
         captureState(payload);
         renderRows(payload.items || []);
@@ -708,6 +814,10 @@
         }
     });
 
+    summaryDate.addEventListener("change", renderSummary);
+    dayTab.addEventListener("click", () => selectTab(dayTab));
+    summaryTab.addEventListener("click", () => selectTab(summaryTab));
+
     exportButton.addEventListener("click", () => {
         const date = filterDate.value;
         if (!date) {
@@ -740,6 +850,7 @@
     const today = todayIso();
     entryDate.value = today;
     filterDate.value = today;
+    summaryDate.value = today;
     try {
         loadEntries();
     } catch (error) {

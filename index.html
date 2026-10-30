@@ -11,10 +11,6 @@
       <header class="hero">
         <p class="eyebrow">Expense Management</p>
         <h1>Sổ chi tiêu</h1>
-        <p class="lead">
-          Nhập tổng tiền một lần. Số đó dùng cho 7 ngày kể từ ngày nhập. Còn lại bằng tổng trừ mọi khoản chi trong 7 ngày.
-          Dữ liệu lưu trên trình duyệt (localStorage), không cần máy chủ.
-        </p>
       </header>
  
       <section class="card" aria-labelledby="entry-title">
@@ -57,9 +53,7 @@
               required
             />
           </label>
-          <div class="actions">
-            <button id="save-button" type="submit">Lưu</button>
-          </div>
+          <div class="actions"><button id="save-button" type="submit">Lưu</button></div>
           <div class="remaining-box" id="remaining-box">
             <div>
               <span>Còn lại</span>
@@ -72,7 +66,7 @@
       </section>
 <section class="card" aria-labelledby="list-title">
         <div class="list-head">
-          <h2 id="list-title">Danh sách theo ngày</h2>
+          <h2 id="list-title">Danh sách chi tiêu</h2>
           <div class="filter-bar">
             <label>
               Lọc theo ngày
@@ -81,6 +75,11 @@
             <button id="export-button" type="button">Xuất file</button>
           </div>
         </div>
+                <div class="tabs" role="tablist" aria-label="Chế độ xem chi tiêu">
+                    <button id="day-tab" type="button" role="tab" aria-selected="true" aria-controls="day-panel">Theo ngày</button>
+                    <button id="summary-tab" type="button" role="tab" aria-selected="false" aria-controls="summary-panel" tabindex="-1">Tổng hợp 7 ngày</button>
+                </div>
+                <div id="day-panel" role="tabpanel" aria-labelledby="day-tab">
         <div class="table-wrap">
           <table>
             <thead>
@@ -108,6 +107,35 @@
           </table>
         </div>
         <p id="list-message" class="message" role="status"></p>
+                </div>
+                <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden>
+                    <div class="summary-filter">
+                        <label>
+                            Chọn ngày trong kỳ
+                            <input id="summary-date" type="date" />
+                        </label>
+                        <p id="summary-range" class="summary-range" aria-live="polite"></p>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Ngày</th>
+                                    <th>Nội dung</th>
+                                    <th class="col-money">Số tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summary-rows"></tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="2">Tổng chi trong kỳ</td>
+                                    <td id="summary-total" class="col-money">0</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <p id="summary-message" class="message" role="status"></p>
+                </div>
       </section>
     </main>
     <script src="app.js"></script>
