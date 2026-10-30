@@ -316,6 +316,14 @@ button:disabled {
 #day-panel #export-button {
     grid-column: 2;
     grid-row: 2;
+    justify-self: start;
+    width: max-content;
+    white-space: nowrap;
+}
+
+.summary-filter #summary-export-button {
+    justify-self: start;
+    width: max-content;
     white-space: nowrap;
 }
 
