@@ -664,6 +664,7 @@
         summaryPanel.hidden = !showSummary;
         dayFilter.hidden = showSummary;
         if (showSummary) {
+            summaryDate.value = filterDate.value || entryDate.value || todayIso();
             renderSummary();
         }
     }
@@ -807,14 +808,22 @@
     });
 
     filterDate.addEventListener("change", () => {
+        summaryDate.value = filterDate.value;
         try {
             loadEntries();
+            if (!summaryPanel.hidden) {
+                renderSummary();
+            }
         } catch (error) {
             setMessage(listMessage, "Không tải được danh sách", "error");
         }
     });
 
-    summaryDate.addEventListener("change", renderSummary);
+    summaryDate.addEventListener("change", () => {
+        filterDate.value = summaryDate.value;
+        renderSummary();
+        loadEntries();
+    });
     dayTab.addEventListener("click", () => selectTab(dayTab));
     summaryTab.addEventListener("click", () => selectTab(summaryTab));
 
