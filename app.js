@@ -2,9 +2,6 @@
     "use strict";
 
     const STORAGE_KEY = "expense-management-v1";
-    const FILE_HANDLE_DB = "expense-management-file-handles";
-    const FILE_HANDLE_STORE = "handles";
-    const DATA_FOLDER_HANDLE_KEY = "expense-data-folder";
     const PERIOD_DAY_COUNT = 7;
     const MAX_CONTENT_LENGTH = 200;
     const CENTS_FACTOR = 100;
@@ -44,8 +41,7 @@
     };
 
     const entryForm = document.querySelector("#entry-form");
-    const connectDataFolderButton = document.querySelector("#connect-data-folder");
-    const dataFileStatus = document.querySelector("#data-file-status");
+    const serverStatus = document.querySelector("#server-status");
     const entryDate = document.querySelector("#entry-date");
     const budgetAmount = document.querySelector("#budget-amount");
     const budgetLocked = document.querySelector("#budget-locked");
@@ -80,9 +76,10 @@
     let daySpent = 0;
     let budgetSet = false;
     let previousRemaining = null;
-    let dataDirectoryHandle = null;
-    let fileWriteQueue = Promise.resolve();
-    let fileWriteError = null;
+    let backendReady = false;
+    let backendInitialized = false;
+    let backendWriteQueue = Promise.resolve();
+    let backendWriteError = null;
 
     function loadStore() {
         try {
@@ -117,205 +114,36 @@
 
     function saveStore(store) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-        if (!dataDirectoryHandle) {
+        if (!backendReady) {
             return;
         }
-        const handle = dataDirectoryHandle;
-        const snapshot = JSON.parse(JSON.stringify(store));
-        fileWriteError = null;
-        setDataFileStatus("Đang lưu vào thư mục dữ liệu...", "");
-        fileWriteQueue = fileWriteQueue
-            .then(() => writeStoreToDirectory(handle, snapshot))
+        const snapshot = JSON.stringify(store);
+        backendWriteError = null;
+        setServerStatus("Đang lưu dữ liệu lên server...", "");
+        backendWriteQueue = backendWriteQueue
+            .catch(() => {})
+            .then(async () => {
+                const response = await fetch("/api/store", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: snapshot,
+                });
+                if (!response.ok) {
+                    throw new Error("Server không lưu được dữ liệu");
+                }
+            })
             .then(() => {
-                setDataFileStatus(`Đã cập nhật dữ liệu trong thư mục ${handle.name}.`, "ok");
+                setServerStatus("Dữ liệu đã lưu trên server.", "ok");
             })
             .catch((error) => {
-                fileWriteError = error;
-                setDataFileStatus("Không ghi được thư mục dữ liệu. Hãy chọn lại thư mục và cấp quyền.", "error");
+                backendWriteError = error;
+                setServerStatus("Không đồng bộ được dữ liệu với server.", "error");
             });
     }
 
-    function setDataFileStatus(text, kind) {
-        dataFileStatus.textContent = text;
-        dataFileStatus.className = kind ? `message ${kind}` : "message";
-    }
-
-    function openFileHandleDatabase() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(FILE_HANDLE_DB, 1);
-            request.onupgradeneeded = () => {
-                request.result.createObjectStore(FILE_HANDLE_STORE);
-            };
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async function getSavedDataDirectoryHandle() {
-        const database = await openFileHandleDatabase();
-        return new Promise((resolve, reject) => {
-            const transaction = database.transaction(FILE_HANDLE_STORE, "readonly");
-            const request = transaction.objectStore(FILE_HANDLE_STORE).get(DATA_FOLDER_HANDLE_KEY);
-            request.onsuccess = () => {
-                database.close();
-                resolve(request.result || null);
-            };
-            request.onerror = () => {
-                database.close();
-                reject(request.error);
-            };
-        });
-    }
-
-    async function rememberDataDirectoryHandle(handle) {
-        const database = await openFileHandleDatabase();
-        return new Promise((resolve, reject) => {
-            const transaction = database.transaction(FILE_HANDLE_STORE, "readwrite");
-            transaction.objectStore(FILE_HANDLE_STORE).put(handle, DATA_FOLDER_HANDLE_KEY);
-            transaction.oncomplete = () => {
-                database.close();
-                resolve();
-            };
-            transaction.onerror = () => {
-                database.close();
-                reject(transaction.error);
-            };
-        });
-    }
-
-    async function writeTextFile(handle, text) {
-        const writable = await handle.createWritable();
-        await writable.write(text);
-        await writable.close();
-    }
-
-    async function readOptionalTextFile(directory, fileName) {
-        try {
-            const fileHandle = await directory.getFileHandle(fileName);
-            return await (await fileHandle.getFile()).text();
-        } catch (error) {
-            if (error.name === "NotFoundError") {
-                return "";
-            }
-            throw error;
-        }
-    }
-
-    function isoDateFromFolderName(folderName) {
-        const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(folderName);
-        if (!match) {
-            return null;
-        }
-        const isoDate = `${match[3]}-${match[2]}-${match[1]}`;
-        return isValidIsoDate(isoDate) ? isoDate : null;
-    }
-
-    async function readStoreFromDirectory(directory) {
-        const periodsByStart = new Map();
-        const entries = {};
-        const budgetText = await readOptionalTextFile(directory, "ngan-sach.txt.txt");
-        budgetText.split(/\r?\n/).forEach((line) => {
-            const match = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/.exec(line.trim());
-            if (!match || !isValidIsoDate(match[1])) {
-                return;
-            }
-            const budgetCents = parseBudget(match[2]);
-            if (budgetCents !== null && budgetCents > 0) {
-                periodsByStart.set(match[1], { start: match[1], budgetCents });
-            }
-        });
-
-        for await (const [folderName, dayDirectory] of directory.entries()) {
-            if (dayDirectory.kind !== "directory") {
-                continue;
-            }
-            const isoDate = isoDateFromFolderName(folderName);
-            if (!isoDate) {
-                continue;
-            }
-            const expenseText = await readOptionalTextFile(dayDirectory, "chi-tieu.txt.txt");
-            const items = expenseText.split(/\r?\n/).flatMap((line) => {
-                const separator = line.lastIndexOf(" - ");
-                if (separator <= 0) {
-                    return [];
-                }
-                const content = normalizeContent(line.slice(0, separator));
-                const cents = parseMoney(line.slice(separator + 3).trim());
-                return content && cents !== null ? [{ content, cents }] : [];
-            });
-            if (items.length) {
-                entries[isoDate] = items;
-            }
-        }
-
-        return {
-            periods: [...periodsByStart.values()].sort((left, right) => left.start.localeCompare(right.start)),
-            entries,
-        };
-    }
-
-    async function writeStoreToDirectory(directory, store) {
-        const budgetLines = readPeriods(store).map(
-            (period) => `${period.start} ${formatStoredAmount(period.budgetCents)}`
-        );
-        const budgetFile = await directory.getFileHandle("ngan-sach.txt.txt", { create: true });
-        await writeTextFile(budgetFile, budgetLines.length ? `${budgetLines.join("\r\n")}\r\n` : "");
-
-        for (const [isoDate, items] of Object.entries(store.entries)) {
-            if (!isValidIsoDate(isoDate) || !Array.isArray(items)) {
-                continue;
-            }
-            const dayDirectory = await directory.getDirectoryHandle(folderNameFromIso(isoDate), {
-                create: true,
-            });
-            const expenseFile = await dayDirectory.getFileHandle("chi-tieu.txt.txt", {
-                create: true,
-            });
-            const lines = items.map(
-                (item) => `${item.content} - ${formatStoredAmount(item.cents)}`
-            );
-            await writeTextFile(expenseFile, lines.length ? `${lines.join("\r\n")}\r\n` : "");
-        }
-    }
-
-    async function connectDataDirectory(directory) {
-        const diskStore = await readStoreFromDirectory(directory);
-        const hasData = diskStore.periods.length > 0 || Object.keys(diskStore.entries).length > 0;
-        const store = hasData ? diskStore : loadStore();
-        dataDirectoryHandle = directory;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-        if (!hasData) {
-            await writeStoreToDirectory(directory, store);
-        }
-        await rememberDataDirectoryHandle(directory);
-        setDataFileStatus(`Đã kết nối thư mục ${directory.name}.`, "ok");
-        refreshSummaryDates();
-        refreshEntryBudget();
-        loadEntries();
-        if (!summaryPanel.hidden) {
-            renderSummary();
-        }
-    }
-
-    async function restoreDataDirectory() {
-        try {
-            const directory = await getSavedDataDirectoryHandle();
-            if (!directory) {
-                return;
-            }
-            if (directory.kind !== "directory") {
-                setDataFileStatus("Hãy chọn lại thư mục data để lưu file theo ngày.", "");
-                return;
-            }
-            const permission = await directory.queryPermission({ mode: "readwrite" });
-            if (permission === "granted") {
-                await connectDataDirectory(directory);
-            } else {
-                setDataFileStatus(`Thư mục ${directory.name} đã liên kết. Bấm Chọn thư mục data để cấp lại quyền.`, "");
-            }
-        } catch (error) {
-            setDataFileStatus("Chưa kết nối được thư mục data; dữ liệu hiện lưu trên trình duyệt.", "error");
-        }
+    function setServerStatus(text, kind) {
+        serverStatus.textContent = text;
+        serverStatus.className = kind ? `message ${kind}` : "message";
     }
 
     function isValidIsoDate(value) {
@@ -981,20 +809,6 @@
         }
     }
 
-    connectDataFolderButton.addEventListener("click", async () => {
-        try {
-            if (typeof window.showDirectoryPicker !== "function") {
-                throw new Error("Trình duyệt không hỗ trợ chọn thư mục trực tiếp");
-            }
-            const directory = await window.showDirectoryPicker({ mode: "readwrite" });
-            await connectDataDirectory(directory);
-        } catch (error) {
-            if (error.name !== "AbortError") {
-                setDataFileStatus(error.message || "Không kết nối được thư mục data.", "error");
-            }
-        }
-    });
-
     entryForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         setMessage(formMessage, "");
@@ -1014,12 +828,16 @@
         }
         saveButton.disabled = true;
         try {
+            if (!backendInitialized) {
+                setMessage(formMessage, "Đang kết nối máy chủ, vui lòng thử lại.", "error");
+                return;
+            }
             const payload = saveEntry(body);
             if (!payload.ok) {
                 setMessage(formMessage, payload.message || "Không lưu được", "error");
                 return;
             }
-            await fileWriteQueue;
+            await backendWriteQueue;
             entryContent.value = "";
             entryAmount.value = "";
             entryContent.focus();
@@ -1028,8 +846,8 @@
             if (!summaryPanel.hidden) {
                 renderSummary();
             }
-            if (fileWriteError) {
-                setMessage(formMessage, "Đã lưu trên trình duyệt nhưng chưa ghi được thư mục data.", "error");
+            if (!backendReady || backendWriteError) {
+                setMessage(formMessage, "Đã lưu trên trình duyệt nhưng chưa đồng bộ lên server.", "error");
             } else {
                 setMessage(
                     formMessage,
@@ -1047,6 +865,10 @@
     entryAmount.addEventListener("input", updateRemainingPreview);
 
     budgetAmount.addEventListener("change", async () => {
+        if (!backendInitialized) {
+            setMessage(formMessage, "Đang kết nối máy chủ, vui lòng thử lại.", "error");
+            return;
+        }
         if (budgetSet) {
             return;
         }
@@ -1067,14 +889,14 @@
             );
             return;
         }
-        await fileWriteQueue;
+        await backendWriteQueue;
         captureState(payload);
         refreshSummaryDates(payload.date);
         if (!summaryPanel.hidden) {
             renderSummary();
         }
-        if (fileWriteError) {
-            setMessage(formMessage, "Đã lưu trên trình duyệt nhưng chưa ghi được thư mục data.", "error");
+        if (!backendReady || backendWriteError) {
+            setMessage(formMessage, "Đã lưu trên trình duyệt nhưng chưa đồng bộ lên server.", "error");
         } else {
             setMessage(
                 formMessage,
@@ -1169,14 +991,56 @@
         );
     });
 
+    async function initializeBackend() {
+        const controls = Array.from(entryForm.elements);
+        controls.forEach((control) => {
+            control.disabled = true;
+        });
+        setServerStatus("Đang kết nối máy chủ...", "");
+
+        const cachedStore = loadStore();
+        try {
+            const response = await fetch("/api/store");
+            if (!response.ok) {
+                throw new Error("Không đọc được dữ liệu trên máy chủ");
+            }
+            let store = await response.json();
+            const serverHasData = store.periods?.length || Object.keys(store.entries || {}).length;
+            if (!serverHasData) {
+                store = cachedStore;
+                const migration = await fetch("/api/store", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(store),
+                });
+                if (!migration.ok) {
+                    throw new Error("Không chuyển được dữ liệu cũ lên máy chủ");
+                }
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+            backendReady = true;
+            backendWriteError = null;
+            setServerStatus("Đã kết nối; dữ liệu được lưu trên server.", "ok");
+        } catch (error) {
+            backendReady = false;
+            backendWriteError = error;
+            setServerStatus("Không kết nối được server; dữ liệu chỉ lưu trên trình duyệt.", "error");
+        } finally {
+            backendInitialized = true;
+            controls.forEach((control) => {
+                control.disabled = false;
+            });
+            refreshSummaryDates();
+            refreshEntryBudget();
+            loadEntries();
+            if (!summaryPanel.hidden) {
+                renderSummary();
+            }
+        }
+    }
+
     const today = todayIso();
     entryDate.value = today;
     filterDate.value = today;
-    refreshSummaryDates();
-    try {
-        loadEntries();
-    } catch (error) {
-        setMessage(listMessage, "Không tải được danh sách", "error");
-    }
-    restoreDataDirectory();
+    initializeBackend();
 })();

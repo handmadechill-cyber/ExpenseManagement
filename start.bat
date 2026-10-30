@@ -1,5 +1,6 @@
 @echo off
 cd /d "%~dp0"
-set "PAGE=%~dp0index.html"
-echo Mo So chi tieu (thuần HTML/JS, khong can Node.js)
-start "" "%PAGE%"
+echo Starting Expense Management server...
+start "Expense Management Server" /min node server.js
+timeout /t 2 /nobreak >nul
+start "" "http://localhost:3000"
