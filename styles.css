@@ -239,7 +239,7 @@ button:disabled {
 
 .summary-filter {
     display: grid;
-    grid-template-columns: minmax(0, 240px) auto auto;
+    grid-template-columns: minmax(0, 240px) auto;
     align-items: end;
     gap: 12px;
     margin-bottom: 16px;
@@ -265,13 +265,8 @@ button:disabled {
     font-weight: 600;
 }
 
-.summary-filter #summary-search-button {
-    grid-column: 2;
-    grid-row: 1;
-}
-
 .summary-filter #summary-export-button {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 1;
 }
 
@@ -292,7 +287,7 @@ button:disabled {
 }
 
 .filter-bar {
-    grid-template-columns: minmax(0, 240px) auto auto;
+    grid-template-columns: minmax(0, 240px) auto;
     align-items: end;
     margin-bottom: 16px;
 }
@@ -318,14 +313,8 @@ button:disabled {
     min-width: 0;
 }
 
-#day-panel #day-search-button {
-    grid-column: 2;
-    grid-row: 2;
-    white-space: nowrap;
-}
-
 #day-panel #export-button {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 2;
     white-space: nowrap;
 }
@@ -428,12 +417,12 @@ td.negative {
     }
 
     .filter-bar {
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: end;
     }
 
     #day-panel .filter-bar {
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto;
     }
 
     #day-panel .filter-bar label {
@@ -441,7 +430,7 @@ td.negative {
     }
 
     .summary-filter {
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
     }
 

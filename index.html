@@ -73,13 +73,12 @@
         </div>
                 <div class="tabs" role="tablist" aria-label="Chế độ xem chi tiêu">
                     <button id="day-tab" type="button" role="tab" aria-selected="true" aria-controls="day-panel">Theo ngày</button>
-                    <button id="summary-tab" type="button" role="tab" aria-selected="false" aria-controls="summary-panel" tabindex="-1">Tổng hợp 7 ngày</button>
+                    <button id="summary-tab" type="button" role="tab" aria-selected="false" aria-controls="summary-panel" tabindex="-1">Tổng hợp</button>
                 </div>
                 <div id="day-panel" role="tabpanel" aria-labelledby="day-tab">
         <div class="filter-bar">
                   <label for="filter-date">Lọc theo ngày</label>
                   <input id="filter-date" type="date" />
-            <button id="day-search-button" type="button">Tìm kiếm</button>
             <button id="export-button" type="button">Xuất file</button>
         </div>
         <div class="table-wrap">
@@ -118,7 +117,6 @@
                             <select id="summary-date" aria-label="Chọn kỳ tổng tiền"></select>
                         </label>
                         <p id="summary-range" class="summary-range" aria-live="polite"></p>
-                        <button id="summary-search-button" type="button">Tìm kiếm</button>
                         <button id="summary-export-button" type="button">Xuất tổng hợp</button>
                     </div>
                     <div class="table-wrap">

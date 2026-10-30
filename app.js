@@ -50,10 +50,8 @@
     const entryAmount = document.querySelector("#entry-amount");
     const saveButton = document.querySelector("#save-button");
     const filterDate = document.querySelector("#filter-date");
-    const daySearchButton = document.querySelector("#day-search-button");
     const exportButton = document.querySelector("#export-button");
     const summaryDate = document.querySelector("#summary-date");
-    const summarySearchButton = document.querySelector("#summary-search-button");
     const summaryExportButton = document.querySelector("#summary-export-button");
     const summaryRange = document.querySelector("#summary-range");
     const summaryRows = document.querySelector("#summary-rows");
@@ -75,10 +73,8 @@
     const appControls = [
         ...entryForm.elements,
         filterDate,
-        daySearchButton,
         exportButton,
         summaryDate,
-        summarySearchButton,
         summaryExportButton,
         dayTab,
         summaryTab,
@@ -511,23 +507,62 @@
         };
     }
 
+    function summarizeAllEntries() {
+        const store = loadStore();
+        const today = todayIso();
+        const dataDates = [
+            ...readPeriods(store).map((period) => period.start),
+            ...Object.keys(store.entries).filter((date) => isValidIsoDate(date)),
+        ].filter((date) => date <= today).sort();
+        if (!dataDates.length) {
+            return { ok: true, period: null, entries: [], spent: 0 };
+        }
+
+        const start = dataDates[0];
+        const entries = [];
+        let spentCents = 0;
+        let cursor = start;
+        while (cursor <= today) {
+            readDayItems(store, cursor).forEach((item) => {
+                entries.push({
+                    date: cursor,
+                    content: item.content,
+                    amount: centsToAmount(item.cents),
+                });
+                spentCents += item.cents;
+            });
+            cursor = addDays(cursor, 1);
+        }
+
+        return {
+            ok: true,
+            period: { start, end: today, scheduledEnd: today, budget: null },
+            entries,
+            spent: centsToAmount(spentCents),
+        };
+    }
+
     function refreshSummaryDates(preferredStart) {
         const periods = readPeriods(loadStore());
         const dailyPeriod = isValidIsoDate(filterDate.value)
             ? findPeriod(filterDate.value, periods)
             : null;
         const currentPeriod = periods.find((period) => period.start === summaryDate.value);
-        const selectedStart = periods.find((period) => period.start === preferredStart)?.start
-            || dailyPeriod?.start
-            || currentPeriod?.start
-            || (periods.length ? periods[periods.length - 1].start : "");
+        const allSelected = summaryDate.options.length > 0 && summaryDate.value === "";
+        const selectedStart = allSelected
+            ? ""
+            : periods.find((period) => period.start === preferredStart)?.start
+                ?? dailyPeriod?.start
+                ?? currentPeriod?.start
+                ?? periods[periods.length - 1]?.start
+                ?? "";
 
         summaryDate.replaceChildren();
         const placeholder = document.createElement("option");
         placeholder.value = "";
         placeholder.textContent = periods.length
-            ? "Chọn ngày đã nhập tổng tiền"
-            : "Chưa có kỳ tổng tiền";
+            ? "Tất cả chi tiêu"
+            : "Chưa có dữ liệu";
         summaryDate.append(placeholder);
         periods.forEach((period) => {
             const option = document.createElement("option");
@@ -559,11 +594,18 @@
     }
 
     function exportSummary(isoDate) {
-        const summary = summarizeEntries(isoDate);
+        const allData = isoDate === "all";
+        const summary = allData ? summarizeAllEntries() : summarizeEntries(isoDate);
+        if (!summary.period) {
+            return { ok: false, message: "Chưa có dữ liệu để tổng hợp" };
+        }
+        const rangeLine = allData
+            ? `Tất cả chi tiêu: ${formatVn(summary.period.start)} - ${formatVn(summary.period.end)}`
+            : `Kỳ: ${formatVn(summary.period.start)} - ${formatVn(summary.period.end || summary.period.scheduledEnd)}`;
         const lines = [
-            `Kỳ: ${formatVn(summary.period.start)} - ${formatVn(summary.period.end || summary.period.scheduledEnd)}`,
+            rangeLine,
             summary.period.budget === null
-                ? "Tổng tiền: Chưa nhập cho ngày bắt đầu này"
+                ? allData ? "Tổng tiền: Tất cả dữ liệu hiện có" : "Tổng tiền: Chưa nhập cho ngày bắt đầu này"
                 : `Tổng tiền: ${formatMoney(summary.period.budget)} VND`,
             "",
             "Ngày - Nội dung - Số tiền (VND)",
@@ -575,7 +617,9 @@
         ];
         return {
             ok: true,
-            fileName: `tong-hop-7-ngay-${folderNameFromIso(summary.period.start)}.txt`,
+            fileName: allData
+                ? `tong-hop-tat-ca-${folderNameFromIso(summary.period.start)}-${folderNameFromIso(summary.period.end)}.txt`
+                : `tong-hop-7-ngay-${folderNameFromIso(summary.period.start)}.txt`,
             body: `\uFEFF${lines.join("\r\n")}\r\n`,
         };
     }
@@ -806,21 +850,29 @@
     });
 
     function renderSummary() {
-        const payload = summarizeEntries(summaryDate.value);
+        const allData = summaryDate.value === "";
+        const payload = allData ? summarizeAllEntries() : summarizeEntries(summaryDate.value);
         summaryRows.replaceChildren();
         summaryTotal.textContent = formatMoney(payload.spent || 0);
         const period = payload.period;
         if (!period) {
-            summaryRange.textContent = "Chọn ngày đã nhập tổng tiền để xem chi tiêu trong 7 ngày.";
-            summaryRows.append(createEmptyRow("Chưa có kỳ tổng tiền để tổng hợp."));
+            summaryRange.textContent = allData
+                ? "Chưa có dữ liệu chi tiêu."
+                : "Chọn kỳ tổng tiền để xem chi tiêu trong 7 ngày.";
+            summaryRows.append(createEmptyRow("Chưa có dữ liệu để tổng hợp."));
             return;
         }
-        const budgetText = period.budget === null
-            ? "Chưa nhập tổng tiền cho ngày bắt đầu này"
-            : `Tổng tiền: ${formatMoney(period.budget)}`;
-        if (period.end) {
+        if (allData) {
+            summaryRange.textContent = `Tất cả chi tiêu · ${formatVn(period.start)} - ${formatVn(period.end)}`;
+        } else if (period.end) {
+            const budgetText = period.budget === null
+                ? "Chưa nhập tổng tiền cho ngày bắt đầu này"
+                : `Tổng tiền: ${formatMoney(period.budget)}`;
             summaryRange.textContent = `Kỳ ${formatVn(period.start)} - ${formatVn(period.end)} · ${budgetText}`;
         } else {
+            const budgetText = period.budget === null
+                ? "Chưa nhập tổng tiền cho ngày bắt đầu này"
+                : `Tổng tiền: ${formatMoney(period.budget)}`;
             summaryRange.textContent = `Kỳ bắt đầu ${formatVn(period.start)} · Chưa tới ngày bắt đầu · ${budgetText}`;
         }
         if (!payload.entries.length) {
@@ -1042,26 +1094,10 @@
         }
     });
 
-    daySearchButton.addEventListener("click", () => {
-        editingEntryIndex = null;
-        try {
-            loadEntries();
-            if (!summaryPanel.hidden) {
-                refreshSummaryDates();
-                renderSummary();
-            }
-        } catch (error) {
-            setMessage(listMessage, "Không tìm được dữ liệu theo ngày", "error");
-        }
-    });
-
     summaryDate.addEventListener("change", () => {
-        filterDate.value = summaryDate.value;
-        renderSummary();
-        loadEntries();
-    });
-    summarySearchButton.addEventListener("click", () => {
-        filterDate.value = summaryDate.value;
+        if (summaryDate.value) {
+            filterDate.value = summaryDate.value;
+        }
         renderSummary();
         loadEntries();
     });
@@ -1109,7 +1145,7 @@
     summaryExportButton.addEventListener("click", () => {
         downloadExport(
             summaryExportButton,
-            summaryDate.value,
+            summaryDate.value || "all",
             exportSummary,
             summaryMessage,
             "Đã tải file tổng hợp 7 ngày."
