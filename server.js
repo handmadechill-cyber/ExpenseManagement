@@ -3,11 +3,16 @@
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { createClient } = require("@supabase/supabase-js");
 
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const BUDGET_FILE = path.join(DATA_DIR, "ngan-sach.txt.txt");
 const EXPENSE_FILE_NAME = "chi-tieu.txt.txt";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_BUCKET = "expense-data";
+const SUPABASE_DATA_FILE = "expense-store.txt";
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -16,6 +21,14 @@ const MIME_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
 };
+
+if (Boolean(SUPABASE_URL) !== Boolean(SUPABASE_SERVICE_ROLE_KEY)) {
+    throw new Error("Cần cấu hình cả SUPABASE_URL và SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = SUPABASE_URL
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    : null;
 
 function isValidDate(value) {
     if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -69,7 +82,7 @@ async function readTextOrEmpty(filePath) {
     }
 }
 
-async function readStore() {
+async function readLocalStore() {
     const periodsByDate = new Map();
     const entries = {};
     const budgetText = await readTextOrEmpty(BUDGET_FILE);
@@ -159,7 +172,7 @@ function normalizeStore(value) {
     return { periods, entries };
 }
 
-async function writeStore(store) {
+async function writeLocalStore(store) {
     await fs.mkdir(DATA_DIR, { recursive: true });
     const periods = [...store.periods].sort((left, right) => left.start.localeCompare(right.start));
     const budgetLines = periods.map((period) => `${period.start} ${formatAmount(period.budgetCents)}`);
@@ -178,6 +191,51 @@ async function writeStore(store) {
             "utf8"
         );
     }
+}
+
+async function writeSupabaseStore(store) {
+    const { error } = await supabase.storage
+        .from(SUPABASE_BUCKET)
+        .upload(SUPABASE_DATA_FILE, Buffer.from(JSON.stringify(store, null, 2), "utf8"), {
+            contentType: "text/plain; charset=utf-8",
+            upsert: true,
+        });
+    if (error) {
+        throw error;
+    }
+}
+
+async function readStore() {
+    if (!supabase) {
+        return readLocalStore();
+    }
+
+    const { data, error } = await supabase.storage
+        .from(SUPABASE_BUCKET)
+        .download(SUPABASE_DATA_FILE);
+    if (error) {
+        const missingObject = String(error.statusCode) === "404" && /object not found/i.test(error.message || "");
+        if (!missingObject) {
+            throw error;
+        }
+
+        const localStore = await readLocalStore();
+        await writeSupabaseStore(localStore);
+        return localStore;
+    }
+
+    try {
+        return normalizeStore(JSON.parse(await data.text()));
+    } catch (parseError) {
+        throw new Error("File expense-store.txt trên Supabase không hợp lệ");
+    }
+}
+
+async function writeStore(store) {
+    if (!supabase) {
+        return writeLocalStore(store);
+    }
+    await writeSupabaseStore(store);
 }
 
 function sendJson(response, statusCode, value) {
@@ -287,5 +345,6 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(PORT, HOST, () => {
-    console.log(`Expense app listening at http://${HOST}:${PORT}`);
+    const storage = supabase ? `Supabase Storage (${SUPABASE_BUCKET}/${SUPABASE_DATA_FILE})` : DATA_DIR;
+    console.log(`Expense app listening at http://${HOST}:${PORT}; storage: ${storage}`);
 });
