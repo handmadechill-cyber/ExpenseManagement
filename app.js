@@ -63,7 +63,6 @@
     const summaryTab = document.querySelector("#summary-tab");
     const entryRows = document.querySelector("#entry-rows");
     const spentCell = document.querySelector("#spent-cell");
-    const periodSpentCell = document.querySelector("#period-spent-cell");
     const remainingCell = document.querySelector("#remaining-cell");
     const remainingValue = document.querySelector("#remaining-value");
     const remainingBox = document.querySelector("#remaining-box");
@@ -727,9 +726,6 @@
             return;
         }
         spentCell.textContent = formatMoney(daySpent);
-        const counted =
-            budgetSet || typedBudget !== null ? periodSpent + extra : periodSpent;
-        periodSpentCell.textContent = formatMoney(counted);
         paintRemaining(remainingCell, remaining);
     }
 
@@ -928,7 +924,6 @@
         if (!date) {
             renderRows([]);
             spentCell.textContent = formatMoney(0);
-            periodSpentCell.textContent = formatMoney(0);
             paintRemaining(remainingCell, 0);
             return;
         }
@@ -937,7 +932,6 @@
         if (!payload.ok) {
             renderRows([]);
             spentCell.textContent = formatMoney(0);
-            periodSpentCell.textContent = formatMoney(0);
             paintRemaining(remainingCell, 0);
             setMessage(listMessage, payload.message || "Không tải được danh sách", "error");
             return;
@@ -948,7 +942,6 @@
         }
         renderRows(payload.items || []);
         spentCell.textContent = formatMoney(payload.daySpent || 0);
-        periodSpentCell.textContent = formatMoney(payload.periodSpent || 0);
         paintRemaining(remainingCell, payload.remaining || 0);
     }
 
