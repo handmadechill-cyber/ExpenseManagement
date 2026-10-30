@@ -1088,4 +1088,5 @@
         control.disabled = true;
     });
     connectServerButton.addEventListener("click", initializeBackend);
+    initializeBackend();
 })();
