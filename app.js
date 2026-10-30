@@ -50,14 +50,15 @@
     const filterDate = document.querySelector("#filter-date");
     const exportButton = document.querySelector("#export-button");
     const summaryDate = document.querySelector("#summary-date");
+    const summaryExportButton = document.querySelector("#summary-export-button");
     const summaryRange = document.querySelector("#summary-range");
     const summaryRows = document.querySelector("#summary-rows");
     const summaryTotal = document.querySelector("#summary-total");
+    const summaryMessage = document.querySelector("#summary-message");
     const dayPanel = document.querySelector("#day-panel");
     const summaryPanel = document.querySelector("#summary-panel");
     const dayTab = document.querySelector("#day-tab");
     const summaryTab = document.querySelector("#summary-tab");
-    const dayFilter = document.querySelector(".filter-bar");
     const entryRows = document.querySelector("#entry-rows");
     const spentCell = document.querySelector("#spent-cell");
     const periodSpentCell = document.querySelector("#period-spent-cell");
@@ -475,6 +476,29 @@
             body,
         };
     }
+
+    function exportSummary(isoDate) {
+        const summary = summarizeEntries(isoDate);
+        if (!summary.period) {
+            return { ok: false, message: "Ngày này chưa có kỳ tổng tiền để xuất" };
+        }
+        const lines = [
+            `Kỳ: ${formatVn(summary.period.start)} - ${formatVn(summary.period.end || summary.period.scheduledEnd)}`,
+            `Tổng tiền: ${formatMoney(summary.period.budget)} VND`,
+            "",
+            "Ngày - Nội dung - Số tiền (VND)",
+            ...summary.entries.map(
+                (item) => `${formatVn(item.date)} - ${item.content} - ${formatMoney(item.amount)}`
+            ),
+            "",
+            `Tổng chi: ${formatMoney(summary.spent)} VND`,
+        ];
+        return {
+            ok: true,
+            fileName: `tong-hop-7-ngay-${folderNameFromIso(summary.period.start)}.txt`,
+            body: `\uFEFF${lines.join("\r\n")}\r\n`,
+        };
+    }
     function formatMoney(value) {
         const amount = Number(value);
         if (!Number.isFinite(amount)) {
@@ -662,7 +686,6 @@
         summaryTab.tabIndex = showSummary ? 0 : -1;
         dayPanel.hidden = showSummary;
         summaryPanel.hidden = !showSummary;
-        dayFilter.hidden = showSummary;
         if (showSummary) {
             summaryDate.value = filterDate.value || entryDate.value || todayIso();
             renderSummary();
@@ -827,17 +850,16 @@
     dayTab.addEventListener("click", () => selectTab(dayTab));
     summaryTab.addEventListener("click", () => selectTab(summaryTab));
 
-    exportButton.addEventListener("click", () => {
-        const date = filterDate.value;
+    function downloadExport(button, date, exporter, messageElement, successMessage) {
         if (!date) {
-            setMessage(listMessage, "Chọn ngày cần xuất file", "error");
+            setMessage(messageElement, "Chọn ngày cần xuất file", "error");
             return;
         }
-        exportButton.disabled = true;
+        button.disabled = true;
         try {
-            const result = exportEntries(date);
+            const result = exporter(date);
             if (!result.ok) {
-                setMessage(listMessage, result.message || "Không xuất được file", "error");
+                setMessage(messageElement, result.message || "Không xuất được file", "error");
                 return;
             }
             const blob = new Blob([result.body], {
@@ -848,12 +870,32 @@
             link.download = result.fileName;
             link.click();
             URL.revokeObjectURL(link.href);
-            setMessage(listMessage, "Đã tải file theo ngày đang lọc.", "ok");
+            setMessage(messageElement, successMessage, "ok");
         } catch (error) {
-            setMessage(listMessage, "Không xuất được file", "error");
+            setMessage(messageElement, "Không xuất được file", "error");
         } finally {
-            exportButton.disabled = false;
+            button.disabled = false;
         }
+    }
+
+    exportButton.addEventListener("click", () => {
+        downloadExport(
+            exportButton,
+            filterDate.value,
+            exportEntries,
+            listMessage,
+            "Đã tải file theo ngày đang lọc."
+        );
+    });
+
+    summaryExportButton.addEventListener("click", () => {
+        downloadExport(
+            summaryExportButton,
+            summaryDate.value,
+            exportSummary,
+            summaryMessage,
+            "Đã tải file tổng hợp 7 ngày."
+        );
     });
 
     const today = todayIso();

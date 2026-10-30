@@ -67,19 +67,19 @@
 <section class="card" aria-labelledby="list-title">
         <div class="list-head">
           <h2 id="list-title">Danh sách chi tiêu</h2>
-          <div class="filter-bar">
-            <label>
-              Lọc theo ngày
-              <input id="filter-date" type="date" />
-            </label>
-            <button id="export-button" type="button">Xuất file</button>
-          </div>
         </div>
                 <div class="tabs" role="tablist" aria-label="Chế độ xem chi tiêu">
                     <button id="day-tab" type="button" role="tab" aria-selected="true" aria-controls="day-panel">Theo ngày</button>
                     <button id="summary-tab" type="button" role="tab" aria-selected="false" aria-controls="summary-panel" tabindex="-1">Tổng hợp 7 ngày</button>
                 </div>
                 <div id="day-panel" role="tabpanel" aria-labelledby="day-tab">
+        <div class="filter-bar">
+          <label>
+            Lọc theo ngày
+            <input id="filter-date" type="date" />
+          </label>
+          <button id="export-button" type="button">Xuất file</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -115,6 +115,7 @@
                             <input id="summary-date" type="date" />
                         </label>
                         <p id="summary-range" class="summary-range" aria-live="polite"></p>
+                        <button id="summary-export-button" type="button">Xuất tổng hợp</button>
                     </div>
                     <div class="table-wrap">
                         <table>
