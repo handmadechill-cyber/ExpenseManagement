@@ -42,6 +42,7 @@
     };
 
     const entryForm = document.querySelector("#entry-form");
+    const connectServerButton = document.querySelector("#connect-server-button");
     const serverStatus = document.querySelector("#server-status");
     const entryDate = document.querySelector("#entry-date");
     const budgetAmount = document.querySelector("#budget-amount");
@@ -70,6 +71,15 @@
     const periodNote = document.querySelector("#period-note");
     const formMessage = document.querySelector("#form-message");
     const listMessage = document.querySelector("#list-message");
+    const appControls = [
+        ...entryForm.elements,
+        filterDate,
+        exportButton,
+        summaryDate,
+        summaryExportButton,
+        dayTab,
+        summaryTab,
+    ];
 
     const moneyFormat = new Intl.NumberFormat("vi-VN");
     let savedBudget = 0;
@@ -79,6 +89,7 @@
     let previousRemaining = null;
     let backendReady = false;
     let backendInitialized = false;
+    let backendConnecting = false;
     let backendWriteQueue = Promise.resolve();
     let backendWriteError = null;
 
@@ -993,8 +1004,12 @@
     });
 
     async function initializeBackend() {
-        const controls = Array.from(entryForm.elements);
-        controls.forEach((control) => {
+        if (backendConnecting || backendReady) {
+            return;
+        }
+        backendConnecting = true;
+        connectServerButton.disabled = true;
+        appControls.forEach((control) => {
             control.disabled = true;
         });
         setServerStatus("Đang kết nối máy chủ...", "");
@@ -1027,15 +1042,20 @@
             backendWriteError = error;
             setServerStatus("Không kết nối được server; dữ liệu chỉ lưu trên trình duyệt.", "error");
         } finally {
-            backendInitialized = true;
-            controls.forEach((control) => {
-                control.disabled = false;
+            backendConnecting = false;
+            backendInitialized = backendReady;
+            connectServerButton.disabled = false;
+            connectServerButton.hidden = backendReady;
+            appControls.forEach((control) => {
+                control.disabled = !backendReady;
             });
-            refreshSummaryDates();
-            refreshEntryBudget();
-            loadEntries();
-            if (!summaryPanel.hidden) {
-                renderSummary();
+            if (backendReady) {
+                refreshSummaryDates();
+                refreshEntryBudget();
+                loadEntries();
+                if (!summaryPanel.hidden) {
+                    renderSummary();
+                }
             }
         }
     }
@@ -1043,5 +1063,8 @@
     const today = todayIso();
     entryDate.value = today;
     filterDate.value = today;
-    initializeBackend();
+    appControls.forEach((control) => {
+        control.disabled = true;
+    });
+    connectServerButton.addEventListener("click", initializeBackend);
 })();
