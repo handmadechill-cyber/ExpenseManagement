@@ -185,6 +185,12 @@ function sendJson(response, statusCode, value) {
     response.end(JSON.stringify(value));
 }
 
+function setCorsHeaders(response) {
+    response.setHeader("Access-Control-Allow-Origin", process.env.FRONTEND_ORIGIN || "*");
+    response.setHeader("Access-Control-Allow-Methods", "GET, PUT, OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 async function readRequestBody(request) {
     const chunks = [];
     let byteCount = 0;
@@ -264,6 +270,12 @@ async function serveStatic(request, response) {
 const server = http.createServer(async (request, response) => {
     try {
         if (request.url === "/api/store") {
+            setCorsHeaders(response);
+            if (request.method === "OPTIONS") {
+                response.writeHead(204);
+                response.end();
+                return;
+            }
             await handleApi(request, response);
             return;
         }

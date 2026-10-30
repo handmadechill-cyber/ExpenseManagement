@@ -2,6 +2,7 @@
     "use strict";
 
     const STORAGE_KEY = "expense-management-v1";
+    const API_BASE_URL = "https://expense-manager-service-8cm3.onrender.com";
     const PERIOD_DAY_COUNT = 7;
     const MAX_CONTENT_LENGTH = 200;
     const CENTS_FACTOR = 100;
@@ -123,7 +124,7 @@
         backendWriteQueue = backendWriteQueue
             .catch(() => {})
             .then(async () => {
-                const response = await fetch("/api/store", {
+                const response = await fetch(`${API_BASE_URL}/api/store`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: snapshot,
@@ -1000,7 +1001,7 @@
 
         const cachedStore = loadStore();
         try {
-            const response = await fetch("/api/store");
+            const response = await fetch(`${API_BASE_URL}/api/store`);
             if (!response.ok) {
                 throw new Error("Không đọc được dữ liệu trên máy chủ");
             }
@@ -1008,7 +1009,7 @@
             const serverHasData = store.periods?.length || Object.keys(store.entries || {}).length;
             if (!serverHasData) {
                 store = cachedStore;
-                const migration = await fetch("/api/store", {
+                const migration = await fetch(`${API_BASE_URL}/api/store`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(store),
