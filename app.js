@@ -423,13 +423,10 @@
             return { ok: false, message: "Ngày tổng hợp không hợp lệ" };
         }
         const store = loadStore();
-        const period = findPeriod(isoDate, readPeriods(store));
-        if (!period) {
-            return { ok: true, period: null, entries: [], spent: 0 };
-        }
+        const budgetPeriod = readPeriods(store).find((period) => period.start === isoDate);
         const today = todayIso();
-        const scheduledEnd = periodEnd(period.start);
-        const end = today < period.start
+        const scheduledEnd = periodEnd(isoDate);
+        const end = today < isoDate
             ? null
             : today < scheduledEnd
               ? today
@@ -437,7 +434,7 @@
         const entries = [];
         let spentCents = 0;
         if (end) {
-            let cursor = period.start;
+            let cursor = isoDate;
             while (cursor <= end) {
                 readDayItems(store, cursor).forEach((item) => {
                     entries.push({
@@ -452,10 +449,43 @@
         }
         return {
             ok: true,
-            period: { start: period.start, end, scheduledEnd, budget: centsToAmount(period.budgetCents) },
+            period: {
+                start: isoDate,
+                end,
+                scheduledEnd,
+                budget: budgetPeriod ? centsToAmount(budgetPeriod.budgetCents) : null,
+            },
             entries,
             spent: centsToAmount(spentCents),
         };
+    }
+
+    function refreshSummaryDates(preferredStart) {
+        const periods = readPeriods(loadStore());
+        const dailyPeriod = isValidIsoDate(filterDate.value)
+            ? findPeriod(filterDate.value, periods)
+            : null;
+        const currentPeriod = periods.find((period) => period.start === summaryDate.value);
+        const selectedStart = periods.find((period) => period.start === preferredStart)?.start
+            || dailyPeriod?.start
+            || currentPeriod?.start
+            || (periods.length ? periods[periods.length - 1].start : "");
+
+        summaryDate.replaceChildren();
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = periods.length
+            ? "Chọn ngày đã nhập tổng tiền"
+            : "Chưa có kỳ tổng tiền";
+        summaryDate.append(placeholder);
+        periods.forEach((period) => {
+            const option = document.createElement("option");
+            option.value = period.start;
+            option.textContent = `${formatVn(period.start)} · ${formatMoney(centsToAmount(period.budgetCents))} VND`;
+            summaryDate.append(option);
+        });
+        summaryDate.value = selectedStart;
+        return selectedStart;
     }
 
     function exportEntries(isoDate) {
@@ -479,12 +509,11 @@
 
     function exportSummary(isoDate) {
         const summary = summarizeEntries(isoDate);
-        if (!summary.period) {
-            return { ok: false, message: "Ngày này chưa có kỳ tổng tiền để xuất" };
-        }
         const lines = [
             `Kỳ: ${formatVn(summary.period.start)} - ${formatVn(summary.period.end || summary.period.scheduledEnd)}`,
-            `Tổng tiền: ${formatMoney(summary.period.budget)} VND`,
+            summary.period.budget === null
+                ? "Tổng tiền: Chưa nhập cho ngày bắt đầu này"
+                : `Tổng tiền: ${formatMoney(summary.period.budget)} VND`,
             "",
             "Ngày - Nội dung - Số tiền (VND)",
             ...summary.entries.map(
@@ -639,16 +668,19 @@
         const payload = summarizeEntries(summaryDate.value);
         summaryRows.replaceChildren();
         summaryTotal.textContent = formatMoney(payload.spent || 0);
-        if (!payload.period) {
-            summaryRange.textContent = "Ngày này chưa có tổng tiền được nhập cho kỳ 7 ngày.";
-            summaryRows.append(createEmptyRow("Chưa có dữ liệu tổng hợp cho ngày này."));
+        const period = payload.period;
+        if (!period) {
+            summaryRange.textContent = "Chọn ngày đã nhập tổng tiền để xem chi tiêu trong 7 ngày.";
+            summaryRows.append(createEmptyRow("Chưa có kỳ tổng tiền để tổng hợp."));
             return;
         }
-        const period = payload.period;
+        const budgetText = period.budget === null
+            ? "Chưa nhập tổng tiền cho ngày bắt đầu này"
+            : `Tổng tiền: ${formatMoney(period.budget)}`;
         if (period.end) {
-            summaryRange.textContent = `Kỳ ${formatVn(period.start)} - ${formatVn(period.end)} · Tổng tiền: ${formatMoney(period.budget)}`;
+            summaryRange.textContent = `Kỳ ${formatVn(period.start)} - ${formatVn(period.end)} · ${budgetText}`;
         } else {
-            summaryRange.textContent = `Kỳ bắt đầu ${formatVn(period.start)} · Chưa tới ngày bắt đầu · Tổng tiền: ${formatMoney(period.budget)}`;
+            summaryRange.textContent = `Kỳ bắt đầu ${formatVn(period.start)} · Chưa tới ngày bắt đầu · ${budgetText}`;
         }
         if (!payload.entries.length) {
             summaryRows.append(createEmptyRow("Chưa có khoản chi trong khoảng thời gian này."));
@@ -687,7 +719,7 @@
         dayPanel.hidden = showSummary;
         summaryPanel.hidden = !showSummary;
         if (showSummary) {
-            summaryDate.value = filterDate.value || entryDate.value || todayIso();
+            refreshSummaryDates();
             renderSummary();
         }
     }
@@ -770,6 +802,10 @@
             entryAmount.value = "";
             entryContent.focus();
             filterDate.value = entryDate.value;
+            refreshSummaryDates(entryDate.value);
+            if (!summaryPanel.hidden) {
+                renderSummary();
+            }
             setMessage(
                 formMessage,
                 `Đã lưu. Còn lại ${formatMoney(payload.remaining)}.`,
@@ -806,6 +842,10 @@
             return;
         }
         captureState(payload);
+        refreshSummaryDates(payload.date);
+        if (!summaryPanel.hidden) {
+            renderSummary();
+        }
         setMessage(
             formMessage,
             `Đã mở kỳ 7 ngày. Còn lại ${formatMoney(payload.remaining)}.`,
@@ -831,7 +871,7 @@
     });
 
     filterDate.addEventListener("change", () => {
-        summaryDate.value = filterDate.value;
+        refreshSummaryDates();
         try {
             loadEntries();
             if (!summaryPanel.hidden) {
@@ -901,7 +941,7 @@
     const today = todayIso();
     entryDate.value = today;
     filterDate.value = today;
-    summaryDate.value = today;
+    refreshSummaryDates();
     try {
         loadEntries();
     } catch (error) {

@@ -15,53 +15,53 @@
  
       <section class="card" aria-labelledby="entry-title">
         <h2 id="entry-title">Nhập chi tiêu</h2>
-        <form id="entry-form" class="form-grid">
-          <label>
-            Ngày
-            <input id="entry-date" name="date" type="date" required />
-          </label>
-          <label id="budget-field">
-            Tổng tiền
-            <input
-              id="budget-amount"
-              name="budget"
-              type="text"
-              inputmode="decimal"
-              placeholder="Dùng cho 7 ngày"
-            />
-            <span id="budget-locked" hidden></span>
-          </label>
-          <label class="span-2">
-            Nội dung
-            <input
-              id="entry-content"
-              name="content"
-              type="text"
-              maxlength="200"
-              placeholder="Ví dụ: Cơm trưa"
-              required
-            />
-          </label>
-          <label>
-            Số tiền (VND)
-            <input
-              id="entry-amount"
-              name="amount"
-              type="text"
-              inputmode="decimal"
-              placeholder="50000 hoặc 50.000"
-              required
-            />
-          </label>
-          <div class="actions"><button id="save-button" type="submit">Lưu</button></div>
-          <div class="remaining-box" id="remaining-box">
-            <div>
-              <span>Còn lại</span>
-              <small id="period-note"></small>
-            </div>
-            <strong id="remaining-value">0</strong>
-          </div>
-        </form>
+                <form id="entry-form" class="form-grid">
+                    <label class="date-field">
+                        <span>Ngày</span>
+                        <input id="entry-date" name="date" type="date" required />
+                    </label>
+                    <label id="budget-field">
+                        <span>Tổng tiền</span>
+                        <input
+                            id="budget-amount"
+                            name="budget"
+                            type="text"
+                            inputmode="decimal"
+                            placeholder="Dùng cho 7 ngày"
+                        />
+                        <span id="budget-locked" hidden></span>
+                    </label>
+                    <label class="content-field">
+                        <span>Nội dung</span>
+                        <input
+                            id="entry-content"
+                            name="content"
+                            type="text"
+                            maxlength="200"
+                            placeholder="Ví dụ: Cơm trưa"
+                            required
+                        />
+                    </label>
+                    <label class="amount-field">
+                        <span>Số tiền (VND)</span>
+                        <input
+                            id="entry-amount"
+                            name="amount"
+                            type="text"
+                            inputmode="decimal"
+                            placeholder="50000 hoặc 50.000"
+                            required
+                        />
+                    </label>
+                    <div class="actions"><button id="save-button" type="submit">Lưu</button></div>
+                    <div class="remaining-box" id="remaining-box">
+                        <div>
+                            <span>Còn lại</span>
+                            <small id="period-note"></small>
+                        </div>
+                        <strong id="remaining-value">0</strong>
+                    </div>
+                </form>
         <p id="form-message" class="message" role="status"></p>
       </section>
 <section class="card" aria-labelledby="list-title">
@@ -74,10 +74,8 @@
                 </div>
                 <div id="day-panel" role="tabpanel" aria-labelledby="day-tab">
         <div class="filter-bar">
-          <label>
-            Lọc theo ngày
-            <input id="filter-date" type="date" />
-          </label>
+                  <label for="filter-date">Lọc theo ngày</label>
+                  <input id="filter-date" type="date" />
           <button id="export-button" type="button">Xuất file</button>
         </div>
         <div class="table-wrap">
@@ -111,8 +109,8 @@
                 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden>
                     <div class="summary-filter">
                         <label>
-                            Chọn ngày trong kỳ
-                            <input id="summary-date" type="date" />
+                            Chọn kỳ tổng tiền
+                            <select id="summary-date" aria-label="Chọn kỳ tổng tiền"></select>
                         </label>
                         <p id="summary-range" class="summary-range" aria-live="polite"></p>
                         <button id="summary-export-button" type="button">Xuất tổng hợp</button>

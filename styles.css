@@ -71,24 +71,48 @@ body {
 }
 
 .form-grid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: start;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     align-items: end;
 }
 
 .form-grid > label {
-    flex: 1 1 148px;
-    min-width: min(140px, 100%);
+    display: block;
+    min-width: 0;
 }
 
-.form-grid > label.span-2 {
-    flex: 2 1 200px;
-    min-width: min(160px, 100%);
+.form-grid > label > span:first-child {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.form-grid > label > input {
+    display: block;
+    width: 100%;
+}
+
+.form-grid > .date-field {
+    grid-column: 1 / 4;
+    grid-row: 1;
+}
+
+.form-grid > #budget-field {
+    grid-column: 4 / 7;
+    grid-row: 1;
+}
+
+.form-grid > .content-field {
+    grid-column: 1 / 4;
+    grid-row: 2;
+}
+
+.form-grid > .amount-field {
+    grid-column: 4 / 6;
+    grid-row: 2;
 }
 
 .actions {
-    flex: 0 0 auto;
+    grid-column: 6 / 7;
+    grid-row: 2;
     align-self: end;
     font-size: 0;
 }
@@ -108,7 +132,8 @@ body {
 }
 
 .remaining-box {
-    flex: 1 0 100%;
+    grid-column: 1 / -1;
+    grid-row: 3;
     width: 100%;
     min-height: 44px;
     display: flex;
@@ -140,7 +165,8 @@ label {
     font-weight: 600;
 }
 
-input {
+input,
+select {
     height: 40px;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -209,6 +235,13 @@ button:disabled {
 .summary-filter label {
     grid-column: 1;
     grid-row: 1;
+    width: 100%;
+    min-width: 0;
+}
+
+.summary-filter select {
+    width: 100%;
+    min-width: 0;
 }
 
 .summary-range {
@@ -244,6 +277,32 @@ button:disabled {
     grid-template-columns: 180px auto;
     align-items: end;
     margin-bottom: 16px;
+}
+
+#day-panel .filter-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 240px) auto;
+    gap: 12px;
+    align-items: end;
+}
+
+#day-panel .filter-bar label {
+    grid-column: 1;
+    grid-row: 1;
+    width: min(240px, 100%);
+    min-width: 0;
+}
+
+#day-panel .filter-bar input {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+}
+
+#day-panel .filter-bar button {
+    grid-column: 2;
+    grid-row: 2;
+    white-space: nowrap;
 }
 
 .table-wrap {
@@ -328,6 +387,14 @@ td.negative {
         align-items: end;
     }
 
+    #day-panel .filter-bar {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    #day-panel .filter-bar label {
+        width: auto;
+    }
+
     .summary-filter {
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
@@ -341,5 +408,39 @@ td.negative {
 
     .summary-range {
         grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 560px) {
+    .form-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .form-grid > .date-field {
+        grid-column: 1 / 3;
+    }
+
+    .form-grid > #budget-field {
+        grid-column: 3 / 5;
+    }
+
+    .form-grid > .content-field {
+        grid-column: 1 / 3;
+        grid-row: 2;
+    }
+
+    .form-grid > .amount-field {
+        grid-column: 3 / 4;
+        grid-row: 2;
+    }
+
+    .actions {
+        grid-column: 4 / 5;
+        grid-row: 2;
+        padding-left: 0;
+    }
+
+    .actions button {
+        padding: 0 10px;
     }
 }
