@@ -56,6 +56,7 @@
     const summaryRange = document.querySelector("#summary-range");
     const summaryRows = document.querySelector("#summary-rows");
     const summaryTotal = document.querySelector("#summary-total");
+    const summaryRemaining = document.querySelector("#summary-remaining");
     const summaryMessage = document.querySelector("#summary-message");
     const dayPanel = document.querySelector("#day-panel");
     const summaryPanel = document.querySelector("#summary-panel");
@@ -64,6 +65,7 @@
     const entryRows = document.querySelector("#entry-rows");
     const spentCell = document.querySelector("#spent-cell");
     const remainingCell = document.querySelector("#remaining-cell");
+    const allRemainingCell = document.querySelector("#all-remaining-cell");
     const remainingValue = document.querySelector("#remaining-value");
     const remainingBox = document.querySelector("#remaining-box");
     const periodNote = document.querySelector("#period-note");
@@ -312,6 +314,16 @@
             cursor = addDays(cursor, 1);
         }
         return spentCents;
+    }
+
+    function remainingAcrossPeriods(store) {
+        return readPeriods(store).reduce(
+            (remainingCents, period) =>
+                remainingCents +
+                period.budgetCents -
+                spentBetween(store, period.start, periodEnd(period.start)),
+            0
+        );
     }
 
     function summarizePeriod(store, period) {
@@ -852,6 +864,9 @@
         const payload = allData ? summarizeAllEntries() : summarizeEntries(summaryDate.value);
         summaryRows.replaceChildren();
         summaryTotal.textContent = formatMoney(payload.spent || 0);
+        summaryRemaining.textContent = formatMoney(
+            centsToAmount(remainingAcrossPeriods(loadStore()))
+        );
         const period = payload.period;
         if (!period) {
             summaryRange.textContent = allData
@@ -922,6 +937,10 @@
     }
 
     function loadEntries() {
+        paintRemaining(
+            allRemainingCell,
+            centsToAmount(remainingAcrossPeriods(loadStore()))
+        );
         const date = filterDate.value;
         if (!date) {
             renderRows([]);
