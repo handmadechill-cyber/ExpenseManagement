@@ -838,6 +838,8 @@
         await backendWriteQueue;
         editingEntryIndex = backendWriteError ? index : null;
         loadEntries();
+        refreshSummaryDates();
+        renderSummary();
         if (backendWriteError) {
             setMessage(listMessage, "Đã sửa trên trình duyệt nhưng chưa đồng bộ lên server.", "error");
         } else {
