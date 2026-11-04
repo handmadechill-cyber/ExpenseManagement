@@ -310,9 +310,20 @@ button:disabled {
     font-weight: 700;
 }
 
-.food-list-section h3 {
+.food-list-section h3,
+.food-history-section h3 {
     margin: 0 0 12px;
     font-size: 17px;
+}
+
+.food-history-section {
+    margin-top: 24px;
+}
+
+#food-plan-date {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .food-list {

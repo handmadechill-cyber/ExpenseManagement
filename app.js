@@ -74,6 +74,9 @@
     const foodResult = document.querySelector("#food-result");
     const foodList = document.querySelector("#food-list");
     const foodCount = document.querySelector("#food-count");
+    const foodPlanDate = document.querySelector("#food-plan-date");
+    const foodPlanList = document.querySelector("#food-plan-list");
+    const foodHistoryList = document.querySelector("#food-history-list");
     const entryRows = document.querySelector("#entry-rows");
     const spentCell = document.querySelector("#spent-cell");
     const remainingCell = document.querySelector("#remaining-cell");
@@ -112,6 +115,7 @@
     let backendWriteError = null;
     let editingEntryIndex = null;
     let foodItems = [];
+    let foodPlans = [];
     let foodApiReady = false;
     let foodBusy = false;
     let spinningFoodIndex = null;
@@ -1019,6 +1023,53 @@
         }
         drawFoodWheel();
         updateFoodControls();
+        renderFoodPlans();
+    }
+
+    function formatFoodDate(date) {
+        const [year, month, day] = date.split("-").map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString("vi-VN");
+    }
+
+    function appendFoodPlanItem(list, plan, showDate) {
+        const item = document.createElement("li");
+        const type = document.createElement("span");
+        const name = document.createElement("span");
+        type.className = `food-type-badge food-type-${plan.type === "mặn" ? "man" : plan.type}`;
+        type.textContent = foodTypes[plan.type].label;
+        name.textContent = showDate
+            ? `${formatFoodDate(plan.date)} - ${plan.name}`
+            : plan.name;
+        item.append(type, name);
+        list.append(item);
+    }
+
+    function renderFoodPlans() {
+        const tomorrow = addDays(todayIso(), 1);
+        const tomorrowPlans = foodPlans.filter((plan) => plan.date === tomorrow);
+        foodPlanDate.textContent = formatFoodDate(tomorrow);
+        foodPlanList.replaceChildren();
+        foodHistoryList.replaceChildren();
+        if (tomorrowPlans.length) {
+            tomorrowPlans.forEach((plan) => appendFoodPlanItem(foodPlanList, plan, false));
+        } else {
+            const emptyPlan = document.createElement("li");
+            emptyPlan.className = "empty";
+            emptyPlan.textContent = "Chưa có món nào được chọn cho ngày mai.";
+            foodPlanList.append(emptyPlan);
+        }
+
+        const sortedPlans = [...foodPlans].sort((left, right) =>
+            right.date.localeCompare(left.date)
+        );
+        if (sortedPlans.length) {
+            sortedPlans.forEach((plan) => appendFoodPlanItem(foodHistoryList, plan, true));
+        } else {
+            const emptyHistory = document.createElement("li");
+            emptyHistory.className = "empty";
+            emptyHistory.textContent = "Chưa có lịch sử món ăn.";
+            foodHistoryList.append(emptyHistory);
+        }
     }
 
     async function saveFoodItems(items) {
@@ -1031,6 +1082,19 @@
         if (!response.ok) {
             throw new Error(payload.error || "Không lưu được danh sách món ăn");
         }
+    }
+
+    async function saveFoodSpin(food, foods, date) {
+        const response = await fetch(`${API_BASE_URL}/api/foods/spin`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ food, foods, date }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || "Không lưu được món đã quay");
+        }
+        return payload;
     }
 
     async function finishFoodSpin() {
@@ -1051,14 +1115,17 @@
         foodBusy = true;
         updateFoodControls();
         const remainingFoods = foodItems.filter((food, index) => index !== selectedIndex);
+        const planDate = addDays(todayIso(), 1);
         try {
-            await saveFoodItems(remainingFoods);
-            foodItems = remainingFoods;
-            foodResult.textContent = `Hôm nay ăn: ${foodTypes[selectedFood.type].label} - ${selectedFood.name}`;
-            setFoodMessage("Món đã chọn được loại khỏi danh sách và lưu lại.", "ok");
+            const result = await saveFoodSpin(selectedFood, remainingFoods, planDate);
+            foodItems = result.foods;
+            foodPlans = result.plans;
+            foodResult.textContent =
+                `Đã chọn cho ngày ${formatFoodDate(planDate)}: ${foodTypes[selectedFood.type].label} - ${selectedFood.name}`;
+            setFoodMessage("Món đã được lưu vào lịch ngày mai và lịch sử.", "ok");
             renderFoodList();
         } catch (error) {
-            foodResult.textContent = `Món được chọn: ${foodTypes[selectedFood.type].label} - ${selectedFood.name}`;
+            foodResult.textContent = `Món được chọn nhưng chưa lưu: ${foodTypes[selectedFood.type].label} - ${selectedFood.name}`;
             setFoodMessage(`Không lưu được món đã chọn: ${error.message}`, "error");
         } finally {
             foodCanvas.style.transition = "none";
@@ -1428,10 +1495,16 @@
                 if (!Array.isArray(foodPayload.foods) ||
                     foodPayload.foods.some((food) =>
                         !food || !foodTypes[food.type] || typeof food.name !== "string"
+                    ) ||
+                    !Array.isArray(foodPayload.plans) ||
+                    foodPayload.plans.some((plan) =>
+                        !plan || !foodTypes[plan.type] || typeof plan.name !== "string" ||
+                        !isValidIsoDate(plan.date)
                     )) {
                     throw new Error("Danh sách món ăn trên server không hợp lệ");
                 }
                 foodItems = foodPayload.foods;
+                foodPlans = foodPayload.plans;
                 foodApiReady = true;
                 setFoodMessage("Danh sách món ăn đã được tải.", "ok");
             } catch (error) {

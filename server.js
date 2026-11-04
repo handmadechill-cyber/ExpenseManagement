@@ -85,17 +85,32 @@ async function readTextOrEmpty(filePath) {
 }
 
 function parseFoodsText(text) {
+    return text.split(/\r?\n/).flatMap((line) => parseFoodLine(line));
+}
+
+function parseFoodLine(line) {
+    const separator = line.indexOf("-");
+    if (separator <= 0) {
+        return [];
+    }
+    const type = line.slice(0, separator).trim();
+    const name = line.slice(separator + 1).trim();
+    if (!FOOD_TYPES.has(type) || !name || name.length > 200 || /[\r\n]/.test(name)) {
+        return [];
+    }
+    return [{ type, name }];
+}
+
+function parseFoodPlansText(text) {
     return text.split(/\r?\n/).flatMap((line) => {
-        const separator = line.indexOf("-");
-        if (separator <= 0) {
+        if (!/^\d{4}-\d{2}-\d{2}\|/.test(line)) {
             return [];
         }
-        const type = line.slice(0, separator).trim();
-        const name = line.slice(separator + 1).trim();
-        if (!FOOD_TYPES.has(type) || !name || name.length > 200 || /[\r\n]/.test(name)) {
+        const date = line.slice(0, 10);
+        if (!isValidDate(date)) {
             return [];
         }
-        return [{ type, name }];
+        return parseFoodLine(line.slice(11)).map((food) => ({ date, ...food }));
     });
 }
 
@@ -115,15 +130,39 @@ function normalizeFoods(value) {
     });
 }
 
-async function readFoods() {
+function normalizeFoodPlans(value) {
+    if (!Array.isArray(value)) {
+        throw new Error("Lịch sử món ăn không hợp lệ");
+    }
+    return value.map((plan) => {
+        if (!plan || !isValidDate(plan.date) || !FOOD_TYPES.has(plan.type) ||
+            typeof plan.name !== "string") {
+            throw new Error("Ngày hoặc món ăn trong lịch sử không hợp lệ");
+        }
+        const name = plan.name.trim();
+        if (!name || name.length > 200 || /[\r\n]/.test(name)) {
+            throw new Error("Tên món phải có từ 1 đến 200 ký tự");
+        }
+        return { date: plan.date, type: plan.type, name };
+    });
+}
+
+async function readFoodData() {
     const text = supabase
         ? await downloadSupabaseText(FOOD_FILE_NAME)
         : await readTextOrEmpty(path.join(DATA_DIR, FOOD_FILE_NAME));
-    return parseFoodsText(text || "");
+    return {
+        foods: parseFoodsText(text || ""),
+        plans: parseFoodPlansText(text || ""),
+    };
 }
 
-async function writeFoods(foods) {
-    const text = foods.map((food) => `${food.type}-${food.name}`).join("\r\n");
+async function writeFoodData(foods, plans) {
+    const lines = [
+        ...foods.map((food) => `${food.type}-${food.name}`),
+        ...plans.map((plan) => `${plan.date}|${plan.type}-${plan.name}`),
+    ];
+    const text = lines.join("\r\n");
     const content = text ? `${text}\r\n` : "";
     if (supabase) {
         await uploadSupabaseText(FOOD_FILE_NAME, content);
@@ -397,7 +436,7 @@ function sendJson(response, statusCode, value) {
 
 function setCorsHeaders(response) {
     response.setHeader("Access-Control-Allow-Origin", process.env.FRONTEND_ORIGIN || "*");
-    response.setHeader("Access-Control-Allow-Methods", "GET, PUT, OPTIONS");
+    response.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
     response.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -416,7 +455,7 @@ async function readRequestBody(request) {
 
 async function handleApi(request, response) {
     if (request.method === "GET" && request.url === "/api/foods") {
-        sendJson(response, 200, { foods: await readFoods() });
+        sendJson(response, 200, await readFoodData());
         return;
     }
     if (request.method === "PUT" && request.url === "/api/foods") {
@@ -424,10 +463,41 @@ async function handleApi(request, response) {
         try {
             parsed = JSON.parse(await readRequestBody(request));
             const foods = normalizeFoods(parsed.foods);
-            await writeFoods(foods);
+            const { plans } = await readFoodData();
+            await writeFoodData(foods, plans);
             sendJson(response, 200, { ok: true });
         } catch (error) {
             sendJson(response, 400, { error: error.message || "Không lưu được danh sách món ăn" });
+        }
+        return;
+    }
+    if (request.method === "POST" && request.url === "/api/foods/spin") {
+        try {
+            const parsed = JSON.parse(await readRequestBody(request));
+            const foods = normalizeFoods(parsed.foods);
+            const selectedFoods = normalizeFoods([parsed.food]);
+            if (!isValidDate(parsed.date)) {
+                throw new Error("Ngày lưu món ăn không hợp lệ");
+            }
+            const { foods: currentFoods, plans } = await readFoodData();
+            const selectedIndex = currentFoods.findIndex((food) =>
+                food.type === selectedFoods[0].type && food.name === selectedFoods[0].name
+            );
+            if (selectedIndex < 0) {
+                throw new Error("Món đã được thay đổi; hãy tải lại trang rồi quay lại");
+            }
+            const expectedFoods = currentFoods.filter((food, index) => index !== selectedIndex);
+            if (JSON.stringify(foods) !== JSON.stringify(expectedFoods)) {
+                throw new Error("Danh sách món đã được thay đổi; hãy tải lại trang rồi quay lại");
+            }
+            const updatedPlans = normalizeFoodPlans([
+                ...plans,
+                { date: parsed.date, ...selectedFoods[0] },
+            ]);
+            await writeFoodData(foods, updatedPlans);
+            sendJson(response, 200, { ok: true, foods, plans: updatedPlans });
+        } catch (error) {
+            sendJson(response, 400, { error: error.message || "Không lưu được món đã quay" });
         }
         return;
     }
@@ -495,7 +565,8 @@ async function serveStatic(request, response) {
 
 const server = http.createServer(async (request, response) => {
     try {
-        if (request.url === "/api/store" || request.url === "/api/foods") {
+        if (request.url === "/api/store" || request.url === "/api/foods" ||
+            request.url === "/api/foods/spin") {
             setCorsHeaders(response);
             if (request.method === "OPTIONS") {
                 response.writeHead(204);
