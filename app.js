@@ -71,7 +71,10 @@
     const foodMessage = document.querySelector("#food-message");
     const foodCanvas = document.querySelector("#food-wheel");
     const foodSpinButton = document.querySelector("#food-spin-button");
+    const foodResetButton = document.querySelector("#food-reset-button");
     const foodResult = document.querySelector("#food-result");
+    const foodMenuList = document.querySelector("#food-menu-list");
+    const foodMenuCount = document.querySelector("#food-menu-count");
     const foodList = document.querySelector("#food-list");
     const foodCount = document.querySelector("#food-count");
     const foodPlanDate = document.querySelector("#food-plan-date");
@@ -114,6 +117,7 @@
     let backendWriteQueue = Promise.resolve();
     let backendWriteError = null;
     let editingEntryIndex = null;
+    let foodMenuItems = [];
     let foodItems = [];
     let foodPlans = [];
     let foodApiReady = false;
@@ -953,6 +957,10 @@
         foodType.disabled = !foodApiReady || foodBusy;
         foodAddButton.disabled = !foodApiReady || foodBusy;
         foodSpinButton.disabled = !foodApiReady || foodBusy || foodItems.length === 0;
+        foodResetButton.disabled = !foodApiReady || foodBusy || foodMenuItems.length === 0 ||
+            (foodItems.length === foodMenuItems.length && foodItems.every((food, index) =>
+                food.type === foodMenuItems[index].type && food.name === foodMenuItems[index].name
+            ));
     }
 
     function drawFoodWheel() {
@@ -1002,28 +1010,41 @@
     }
 
     function renderFoodList() {
+        foodMenuList.replaceChildren();
+        foodMenuCount.textContent = `(${foodMenuItems.length})`;
+        if (!foodMenuItems.length) {
+            const emptyMenu = document.createElement("li");
+            emptyMenu.className = "empty";
+            emptyMenu.textContent = "Chưa có món nào trong danh sách.";
+            foodMenuList.append(emptyMenu);
+        } else {
+            foodMenuItems.forEach((food) => appendFoodItem(foodMenuList, food));
+        }
+
         foodList.replaceChildren();
         foodCount.textContent = `(${foodItems.length})`;
         if (!foodItems.length) {
             const emptyItem = document.createElement("li");
             emptyItem.className = "empty";
-            emptyItem.textContent = "Chưa có món nào trong danh sách.";
+            emptyItem.textContent = "Không còn món nào để quay. Hãy reset để chọn lại.";
             foodList.append(emptyItem);
         } else {
-            foodItems.forEach((food) => {
-                const item = document.createElement("li");
-                const type = document.createElement("span");
-                const name = document.createElement("span");
-                type.className = `food-type-badge food-type-${food.type === "mặn" ? "man" : food.type}`;
-                type.textContent = foodTypes[food.type].label;
-                name.textContent = food.name;
-                item.append(type, name);
-                foodList.append(item);
-            });
+            foodItems.forEach((food) => appendFoodItem(foodList, food));
         }
         drawFoodWheel();
         updateFoodControls();
         renderFoodPlans();
+    }
+
+    function appendFoodItem(list, food) {
+        const item = document.createElement("li");
+        const type = document.createElement("span");
+        const name = document.createElement("span");
+        type.className = `food-type-badge food-type-${food.type === "mặn" ? "man" : food.type}`;
+        type.textContent = foodTypes[food.type].label;
+        name.textContent = food.name;
+        item.append(type, name);
+        list.append(item);
     }
 
     function formatFoodDate(date) {
@@ -1072,23 +1093,35 @@
         }
     }
 
-    async function saveFoodItems(items) {
+    async function addFoodItem(food) {
         const response = await fetch(`${API_BASE_URL}/api/foods`, {
-            method: "PUT",
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ foods: items }),
+            body: JSON.stringify({ food }),
         });
         const payload = await response.json();
         if (!response.ok) {
-            throw new Error(payload.error || "Không lưu được danh sách món ăn");
+            throw new Error(payload.error || "Không lưu được món ăn");
         }
+        return payload;
     }
 
-    async function saveFoodSpin(food, foods, date) {
+    async function resetFoodItems() {
+        const response = await fetch(`${API_BASE_URL}/api/foods/reset`, {
+            method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || "Không khôi phục được danh sách món ăn");
+        }
+        return payload;
+    }
+
+    async function saveFoodSpin(food, date) {
         const response = await fetch(`${API_BASE_URL}/api/foods/spin`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ food, foods, date }),
+            body: JSON.stringify({ food, date }),
         });
         const payload = await response.json();
         if (!response.ok) {
@@ -1114,10 +1147,9 @@
 
         foodBusy = true;
         updateFoodControls();
-        const remainingFoods = foodItems.filter((food, index) => index !== selectedIndex);
         const planDate = addDays(todayIso(), 1);
         try {
-            const result = await saveFoodSpin(selectedFood, remainingFoods, planDate);
+            const result = await saveFoodSpin(selectedFood, planDate);
             foodItems = result.foods;
             foodPlans = result.plans;
             foodResult.textContent =
@@ -1360,9 +1392,10 @@
         setFoodMessage("");
         try {
             const food = { type: foodType.value, name };
-            const updatedFoods = [...foodItems, food];
-            await saveFoodItems(updatedFoods);
-            foodItems = updatedFoods;
+            const result = await addFoodItem(food);
+            foodMenuItems = result.menu;
+            foodItems = result.foods;
+            foodPlans = result.plans;
             foodForm.reset();
             foodResult.textContent = "";
             renderFoodList();
@@ -1370,6 +1403,30 @@
             foodName.focus();
         } catch (error) {
             setFoodMessage(`Không thêm được món ăn: ${error.message}`, "error");
+        } finally {
+            foodBusy = false;
+            updateFoodControls();
+        }
+    });
+
+    foodResetButton.addEventListener("click", async () => {
+        if (!foodApiReady || foodBusy || !foodMenuItems.length ||
+            !window.confirm("Khôi phục toàn bộ món ăn vào danh sách có thể quay? Lịch sử đã quay sẽ được giữ lại.")) {
+            return;
+        }
+        foodBusy = true;
+        updateFoodControls();
+        setFoodMessage("");
+        try {
+            const result = await resetFoodItems();
+            foodMenuItems = result.menu;
+            foodItems = result.foods;
+            foodPlans = result.plans;
+            foodResult.textContent = "";
+            renderFoodList();
+            setFoodMessage("Đã khôi phục toàn bộ món ăn; lịch sử vẫn được giữ lại.", "ok");
+        } catch (error) {
+            setFoodMessage(`Không reset được danh sách món: ${error.message}`, "error");
         } finally {
             foodBusy = false;
             updateFoodControls();
@@ -1492,7 +1549,11 @@
                     throw new Error("Không tải được danh sách món ăn từ server");
                 }
                 const foodPayload = await foodResponse.json();
-                if (!Array.isArray(foodPayload.foods) ||
+                if (!Array.isArray(foodPayload.menu) ||
+                    foodPayload.menu.some((food) =>
+                        !food || !foodTypes[food.type] || typeof food.name !== "string"
+                    ) ||
+                    !Array.isArray(foodPayload.foods) ||
                     foodPayload.foods.some((food) =>
                         !food || !foodTypes[food.type] || typeof food.name !== "string"
                     ) ||
@@ -1503,6 +1564,7 @@
                     )) {
                     throw new Error("Danh sách món ăn trên server không hợp lệ");
                 }
+                foodMenuItems = foodPayload.menu;
                 foodItems = foodPayload.foods;
                 foodPlans = foodPayload.plans;
                 foodApiReady = true;

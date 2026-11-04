@@ -9,6 +9,8 @@ const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const BUDGET_FILE = path.join(DATA_DIR, "ngan-sach.txt.txt");
 const FOOD_FILE_NAME = "mon-an.txt";
+const FOOD_REMAINING_FILE_NAME = "mon-an-con-lai.txt";
+const FOOD_HISTORY_DIR_NAME = "lich-su-mon-an";
 const FOOD_TYPES = new Set(["mặn", "canh", "rau"]);
 const EXPENSE_FILE_NAME = "chi-tieu.txt.txt";
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -84,6 +86,30 @@ async function readTextOrEmpty(filePath) {
     }
 }
 
+async function readFoodObject(objectPath) {
+    if (supabase) {
+        return downloadSupabaseText(objectPath);
+    }
+    try {
+        return await fs.readFile(path.join(DATA_DIR, objectPath), "utf8");
+    } catch (error) {
+        if (error.code === "ENOENT") {
+            return null;
+        }
+        throw error;
+    }
+}
+
+async function writeFoodObject(objectPath, text) {
+    if (supabase) {
+        await uploadSupabaseText(objectPath, text);
+        return;
+    }
+    const filePath = path.join(DATA_DIR, objectPath);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, text, "utf8");
+}
+
 function parseFoodsText(text) {
     return text.split(/\r?\n/).flatMap((line) => parseFoodLine(line));
 }
@@ -130,46 +156,107 @@ function normalizeFoods(value) {
     });
 }
 
-function normalizeFoodPlans(value) {
-    if (!Array.isArray(value)) {
-        throw new Error("Lịch sử món ăn không hợp lệ");
-    }
-    return value.map((plan) => {
-        if (!plan || !isValidDate(plan.date) || !FOOD_TYPES.has(plan.type) ||
-            typeof plan.name !== "string") {
-            throw new Error("Ngày hoặc món ăn trong lịch sử không hợp lệ");
+function uniqueFoods(foods) {
+    const seen = new Set();
+    return foods.filter((food) => {
+        const key = `${food.type}\0${food.name}`;
+        if (seen.has(key)) {
+            return false;
         }
-        const name = plan.name.trim();
-        if (!name || name.length > 200 || /[\r\n]/.test(name)) {
-            throw new Error("Tên món phải có từ 1 đến 200 ký tự");
-        }
-        return { date: plan.date, type: plan.type, name };
+        seen.add(key);
+        return true;
     });
 }
 
+function serializeFoods(foods) {
+    return foods.length ? `${foods.map((food) => `${food.type}-${food.name}`).join("\r\n")}\r\n` : "";
+}
+
+async function readFoodHistory() {
+    let fileNames = [];
+    if (supabase) {
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+            const { data, error } = await supabase.storage
+                .from(SUPABASE_BUCKET)
+                .list(FOOD_HISTORY_DIR_NAME, { limit: pageSize, offset });
+            if (error) {
+                throw error;
+            }
+            const page = data || [];
+            fileNames.push(...page
+                .map((entry) => entry.name)
+                .filter((name) => /^\d{4}-\d{2}-\d{2}\.txt$/.test(name)));
+            if (page.length < pageSize) {
+                break;
+            }
+        }
+    } else {
+        try {
+            fileNames = (await fs.readdir(path.join(DATA_DIR, FOOD_HISTORY_DIR_NAME)))
+                .filter((name) => /^\d{4}-\d{2}-\d{2}\.txt$/.test(name));
+        } catch (error) {
+            if (error.code !== "ENOENT") {
+                throw error;
+            }
+        }
+    }
+
+    const plans = [];
+    for (const fileName of fileNames) {
+        const date = fileName.slice(0, 10);
+        if (!isValidDate(date)) {
+            continue;
+        }
+        const text = await readFoodObject(`${FOOD_HISTORY_DIR_NAME}/${fileName}`);
+        plans.push(...parseFoodsText(text || "").map((food) => ({ date, ...food })));
+    }
+    return plans;
+}
+
 async function readFoodData() {
-    const text = supabase
-        ? await downloadSupabaseText(FOOD_FILE_NAME)
-        : await readTextOrEmpty(path.join(DATA_DIR, FOOD_FILE_NAME));
+    const [menuText, remainingText, existingPlans] = await Promise.all([
+        readFoodObject(FOOD_FILE_NAME),
+        readFoodObject(FOOD_REMAINING_FILE_NAME),
+        readFoodHistory(),
+    ]);
+    const savedFoods = parseFoodsText(menuText || "");
+    const legacyPlans = parseFoodPlansText(menuText || "");
+    const menu = uniqueFoods([...savedFoods, ...legacyPlans]);
+
+    if (legacyPlans.length) {
+        const plansByDate = new Map();
+        for (const plan of legacyPlans) {
+            const plansForDate = plansByDate.get(plan.date) || [];
+            plansForDate.push(plan);
+            plansByDate.set(plan.date, plansForDate);
+        }
+        for (const [date, plans] of plansByDate) {
+            if (!existingPlans.some((plan) => plan.date === date)) {
+                await writeFoodObject(
+                    `${FOOD_HISTORY_DIR_NAME}/${date}.txt`,
+                    serializeFoods(plans),
+                );
+            }
+        }
+        await writeFoodObject(FOOD_FILE_NAME, serializeFoods(menu));
+    }
+
+    const foods = remainingText === null ? savedFoods : parseFoodsText(remainingText);
+    if (remainingText === null) {
+        await writeFoodObject(FOOD_REMAINING_FILE_NAME, serializeFoods(foods));
+    }
     return {
-        foods: parseFoodsText(text || ""),
-        plans: parseFoodPlansText(text || ""),
+        foods,
+        menu,
+        plans: legacyPlans.length ? await readFoodHistory() : existingPlans,
     };
 }
 
-async function writeFoodData(foods, plans) {
-    const lines = [
-        ...foods.map((food) => `${food.type}-${food.name}`),
-        ...plans.map((plan) => `${plan.date}|${plan.type}-${plan.name}`),
-    ];
-    const text = lines.join("\r\n");
-    const content = text ? `${text}\r\n` : "";
-    if (supabase) {
-        await uploadSupabaseText(FOOD_FILE_NAME, content);
-        return;
-    }
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(path.join(DATA_DIR, FOOD_FILE_NAME), content, "utf8");
+async function appendFoodPlan(date, food) {
+    const objectPath = `${FOOD_HISTORY_DIR_NAME}/${date}.txt`;
+    const existingFoods = parseFoodsText((await readFoodObject(objectPath)) || "");
+    await writeFoodObject(objectPath, serializeFoods([...existingFoods, food]));
 }
 
 async function readLocalStore() {
@@ -459,43 +546,75 @@ async function handleApi(request, response) {
         return;
     }
     if (request.method === "PUT" && request.url === "/api/foods") {
-        let parsed;
         try {
-            parsed = JSON.parse(await readRequestBody(request));
+            const parsed = JSON.parse(await readRequestBody(request));
             const foods = normalizeFoods(parsed.foods);
-            const { plans } = await readFoodData();
-            await writeFoodData(foods, plans);
-            sendJson(response, 200, { ok: true });
+            await writeFoodObject(FOOD_FILE_NAME, serializeFoods(foods));
+            await writeFoodObject(FOOD_REMAINING_FILE_NAME, serializeFoods(foods));
+            sendJson(response, 200, { ok: true, foods, menu: foods });
         } catch (error) {
             sendJson(response, 400, { error: error.message || "Không lưu được danh sách món ăn" });
+        }
+        return;
+    }
+    if (request.method === "POST" && request.url === "/api/foods") {
+        try {
+            const parsed = JSON.parse(await readRequestBody(request));
+            const [food] = normalizeFoods([parsed.food]);
+            const current = await readFoodData();
+            if (current.menu.some((item) => item.type === food.type && item.name === food.name)) {
+                sendJson(response, 409, { error: "Món ăn này đã có trong danh sách" });
+                return;
+            }
+            const menu = normalizeFoods([...current.menu, food]);
+            const foods = normalizeFoods([...current.foods, food]);
+            await writeFoodObject(FOOD_FILE_NAME, serializeFoods(menu));
+            await writeFoodObject(FOOD_REMAINING_FILE_NAME, serializeFoods(foods));
+            sendJson(response, 200, {
+                ok: true,
+                foods,
+                menu,
+                plans: current.plans,
+            });
+        } catch (error) {
+            sendJson(response, 400, { error: error.message || "Không thêm được món ăn" });
+        }
+        return;
+    }
+    if (request.method === "POST" && request.url === "/api/foods/reset") {
+        try {
+            const current = await readFoodData();
+            await writeFoodObject(FOOD_REMAINING_FILE_NAME, serializeFoods(current.menu));
+            sendJson(response, 200, {
+                ok: true,
+                foods: current.menu,
+                menu: current.menu,
+                plans: current.plans,
+            });
+        } catch (error) {
+            sendJson(response, 500, { error: error.message || "Không khôi phục được danh sách món ăn" });
         }
         return;
     }
     if (request.method === "POST" && request.url === "/api/foods/spin") {
         try {
             const parsed = JSON.parse(await readRequestBody(request));
-            const foods = normalizeFoods(parsed.foods);
             const selectedFoods = normalizeFoods([parsed.food]);
             if (!isValidDate(parsed.date)) {
                 throw new Error("Ngày lưu món ăn không hợp lệ");
             }
-            const { foods: currentFoods, plans } = await readFoodData();
-            const selectedIndex = currentFoods.findIndex((food) =>
+            const current = await readFoodData();
+            const selectedIndex = current.foods.findIndex((food) =>
                 food.type === selectedFoods[0].type && food.name === selectedFoods[0].name
             );
             if (selectedIndex < 0) {
                 throw new Error("Món đã được thay đổi; hãy tải lại trang rồi quay lại");
             }
-            const expectedFoods = currentFoods.filter((food, index) => index !== selectedIndex);
-            if (JSON.stringify(foods) !== JSON.stringify(expectedFoods)) {
-                throw new Error("Danh sách món đã được thay đổi; hãy tải lại trang rồi quay lại");
-            }
-            const updatedPlans = normalizeFoodPlans([
-                ...plans,
-                { date: parsed.date, ...selectedFoods[0] },
-            ]);
-            await writeFoodData(foods, updatedPlans);
-            sendJson(response, 200, { ok: true, foods, plans: updatedPlans });
+            const foods = current.foods.filter((food, index) => index !== selectedIndex);
+            await appendFoodPlan(parsed.date, selectedFoods[0]);
+            await writeFoodObject(FOOD_REMAINING_FILE_NAME, serializeFoods(foods));
+            const plans = await readFoodHistory();
+            sendJson(response, 200, { ok: true, foods, menu: current.menu, plans });
         } catch (error) {
             sendJson(response, 400, { error: error.message || "Không lưu được món đã quay" });
         }
@@ -566,7 +685,7 @@ async function serveStatic(request, response) {
 const server = http.createServer(async (request, response) => {
     try {
         if (request.url === "/api/store" || request.url === "/api/foods" ||
-            request.url === "/api/foods/spin") {
+            request.url === "/api/foods/reset" || request.url === "/api/foods/spin") {
             setCorsHeaders(response);
             if (request.method === "OPTIONS") {
                 response.writeHead(204);

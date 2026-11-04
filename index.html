@@ -171,11 +171,16 @@
                         </div>
                         <div class="food-wheel-controls">
                             <button id="food-spin-button" type="button" disabled>Quay chọn món</button>
+                            <button id="food-reset-button" type="button" disabled>Reset danh sách món</button>
                             <p id="food-result" aria-live="polite">Thêm món ăn để bắt đầu.</p>
                         </div>
                     </div>
                     <div class="food-list-section">
-                        <h3>Danh sách món còn lại <span id="food-count">(0)</span></h3>
+                        <h3>Toàn bộ danh sách món <span id="food-menu-count">(0)</span></h3>
+                        <ul id="food-menu-list" class="food-list"></ul>
+                    </div>
+                    <div class="food-list-section">
+                        <h3>Món có thể quay <span id="food-count">(0)</span></h3>
                         <ul id="food-list" class="food-list"></ul>
                     </div>
                     <div class="food-history-section">
