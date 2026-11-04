@@ -74,6 +74,7 @@
                 <div class="tabs" role="tablist" aria-label="Chế độ xem chi tiêu">
                     <button id="day-tab" type="button" role="tab" aria-selected="true" aria-controls="day-panel">Theo ngày</button>
                     <button id="summary-tab" type="button" role="tab" aria-selected="false" aria-controls="summary-panel" tabindex="-1">Tổng hợp</button>
+                    <button id="food-tab" type="button" role="tab" aria-selected="false" aria-controls="food-panel" tabindex="-1">Món ăn</button>
                 </div>
                 <div id="day-panel" role="tabpanel" aria-labelledby="day-tab">
         <div class="filter-bar">
@@ -142,6 +143,41 @@
                         </table>
                     </div>
                     <p id="summary-message" class="message" role="status"></p>
+                </div>
+                <div id="food-panel" role="tabpanel" aria-labelledby="food-tab" hidden>
+                    <form id="food-form" class="food-form">
+                        <label for="food-name">
+                            Tên món
+                            <input id="food-name" name="name" type="text" maxlength="200" placeholder="Ví dụ: Cá kho" required disabled />
+                        </label>
+                        <label for="food-type">
+                            Loại món
+                            <select id="food-type" name="type" disabled>
+                                <option value="mặn">Món mặn</option>
+                                <option value="canh">Canh</option>
+                                <option value="rau">Rau</option>
+                            </select>
+                        </label>
+                        <button id="food-add-button" type="submit" disabled>Thêm món</button>
+                    </form>
+                    <p id="food-message" class="message" role="status"></p>
+                    <div class="food-wheel-area">
+                        <div class="food-wheel-frame">
+                            <span class="food-wheel-pointer" aria-hidden="true"></span>
+                            <canvas id="food-wheel" width="420" height="420" aria-label="Vòng quay chọn món ăn">
+                                Vòng quay chọn món ăn
+                            </canvas>
+                            <span class="food-wheel-center" aria-hidden="true"></span>
+                        </div>
+                        <div class="food-wheel-controls">
+                            <button id="food-spin-button" type="button" disabled>Quay chọn món</button>
+                            <p id="food-result" aria-live="polite">Thêm món ăn để bắt đầu.</p>
+                        </div>
+                    </div>
+                    <div class="food-list-section">
+                        <h3>Danh sách món còn lại <span id="food-count">(0)</span></h3>
+                        <ul id="food-list" class="food-list"></ul>
+                    </div>
                 </div>
       </section>
     </main>

@@ -8,6 +8,8 @@ const { createClient } = require("@supabase/supabase-js");
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const BUDGET_FILE = path.join(DATA_DIR, "ngan-sach.txt.txt");
+const FOOD_FILE_NAME = "mon-an.txt";
+const FOOD_TYPES = new Set(["mặn", "canh", "rau"]);
 const EXPENSE_FILE_NAME = "chi-tieu.txt.txt";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,6 +82,55 @@ async function readTextOrEmpty(filePath) {
         }
         throw error;
     }
+}
+
+function parseFoodsText(text) {
+    return text.split(/\r?\n/).flatMap((line) => {
+        const separator = line.indexOf("-");
+        if (separator <= 0) {
+            return [];
+        }
+        const type = line.slice(0, separator).trim();
+        const name = line.slice(separator + 1).trim();
+        if (!FOOD_TYPES.has(type) || !name || name.length > 200 || /[\r\n]/.test(name)) {
+            return [];
+        }
+        return [{ type, name }];
+    });
+}
+
+function normalizeFoods(value) {
+    if (!Array.isArray(value) || value.length > 1000) {
+        throw new Error("Danh sách món ăn không hợp lệ");
+    }
+    return value.map((food) => {
+        if (!food || !FOOD_TYPES.has(food.type) || typeof food.name !== "string") {
+            throw new Error("Loại món hoặc tên món không hợp lệ");
+        }
+        const name = food.name.trim();
+        if (!name || name.length > 200 || /[\r\n]/.test(name)) {
+            throw new Error("Tên món phải có từ 1 đến 200 ký tự");
+        }
+        return { type: food.type, name };
+    });
+}
+
+async function readFoods() {
+    const text = supabase
+        ? await downloadSupabaseText(FOOD_FILE_NAME)
+        : await readTextOrEmpty(path.join(DATA_DIR, FOOD_FILE_NAME));
+    return parseFoodsText(text || "");
+}
+
+async function writeFoods(foods) {
+    const text = foods.map((food) => `${food.type}-${food.name}`).join("\r\n");
+    const content = text ? `${text}\r\n` : "";
+    if (supabase) {
+        await uploadSupabaseText(FOOD_FILE_NAME, content);
+        return;
+    }
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(path.join(DATA_DIR, FOOD_FILE_NAME), content, "utf8");
 }
 
 async function readLocalStore() {
@@ -364,6 +415,22 @@ async function readRequestBody(request) {
 }
 
 async function handleApi(request, response) {
+    if (request.method === "GET" && request.url === "/api/foods") {
+        sendJson(response, 200, { foods: await readFoods() });
+        return;
+    }
+    if (request.method === "PUT" && request.url === "/api/foods") {
+        let parsed;
+        try {
+            parsed = JSON.parse(await readRequestBody(request));
+            const foods = normalizeFoods(parsed.foods);
+            await writeFoods(foods);
+            sendJson(response, 200, { ok: true });
+        } catch (error) {
+            sendJson(response, 400, { error: error.message || "Không lưu được danh sách món ăn" });
+        }
+        return;
+    }
     if (request.method === "GET" && request.url === "/api/store") {
         sendJson(response, 200, await readStore());
         return;
@@ -428,7 +495,7 @@ async function serveStatic(request, response) {
 
 const server = http.createServer(async (request, response) => {
     try {
-        if (request.url === "/api/store") {
+        if (request.url === "/api/store" || request.url === "/api/foods") {
             setCorsHeaders(response);
             if (request.method === "OPTIONS") {
                 response.writeHead(204);
