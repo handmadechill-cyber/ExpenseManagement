@@ -581,6 +581,34 @@ async function handleApi(request, response) {
         }
         return;
     }
+    if (request.method === "POST" && request.url === "/api/foods/delete") {
+        try {
+            const parsed = JSON.parse(await readRequestBody(request));
+            const [food] = normalizeFoods([parsed.food]);
+            const current = await readFoodData();
+            if (!current.menu.some((item) => item.type === food.type && item.name === food.name)) {
+                sendJson(response, 404, { error: "Không tìm thấy món ăn trong danh sách" });
+                return;
+            }
+            const menu = current.menu.filter((item) =>
+                item.type !== food.type || item.name !== food.name
+            );
+            const foods = current.foods.filter((item) =>
+                item.type !== food.type || item.name !== food.name
+            );
+            await writeFoodObject(FOOD_FILE_NAME, serializeFoods(menu));
+            await writeFoodObject(FOOD_REMAINING_FILE_NAME, serializeFoods(foods));
+            sendJson(response, 200, {
+                ok: true,
+                foods,
+                menu,
+                plans: current.plans,
+            });
+        } catch (error) {
+            sendJson(response, 400, { error: error.message || "Không xóa được món ăn" });
+        }
+        return;
+    }
     if (request.method === "POST" && request.url === "/api/foods/reset") {
         try {
             const current = await readFoodData();
@@ -685,7 +713,8 @@ async function serveStatic(request, response) {
 const server = http.createServer(async (request, response) => {
     try {
         if (request.url === "/api/store" || request.url === "/api/foods" ||
-            request.url === "/api/foods/reset" || request.url === "/api/foods/spin") {
+            request.url === "/api/foods/reset" || request.url === "/api/foods/spin" ||
+            request.url === "/api/foods/delete") {
             setCorsHeaders(response);
             if (request.method === "OPTIONS") {
                 response.writeHead(204);

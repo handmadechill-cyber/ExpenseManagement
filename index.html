@@ -162,6 +162,14 @@
                     </form>
                     <p id="food-message" class="message" role="status"></p>
                     <div class="food-wheel-area">
+                        <label class="food-spin-type" for="food-spin-type">
+                            Loại món muốn quay
+                            <select id="food-spin-type" disabled>
+                                <option value="mặn">Món mặn</option>
+                                <option value="canh">Canh</option>
+                                <option value="rau">Rau</option>
+                            </select>
+                        </label>
                         <div class="food-wheel-frame">
                             <span class="food-wheel-pointer" aria-hidden="true"></span>
                             <canvas id="food-wheel" width="420" height="420" aria-label="Vòng quay chọn món ăn">

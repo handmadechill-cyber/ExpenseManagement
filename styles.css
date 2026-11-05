@@ -255,6 +255,14 @@ button:disabled {
     margin: 28px 0;
 }
 
+.food-spin-type {
+    width: min(260px, 100%);
+}
+
+.food-spin-type select {
+    width: 100%;
+}
+
 .food-wheel-frame {
     position: relative;
     width: min(420px, 100%);
@@ -344,6 +352,21 @@ button:disabled {
     border: 1px solid var(--line);
     border-radius: 10px;
     background: #fbfdfb;
+}
+
+.food-item-actions {
+    margin-left: auto;
+}
+
+.food-delete-button {
+    height: 32px;
+    padding: 0 10px;
+    background: #9b2c2c;
+    font-size: 14px;
+}
+
+.food-delete-button:hover {
+    background: #7d2020;
 }
 
 .food-type-badge {

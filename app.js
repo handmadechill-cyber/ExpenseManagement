@@ -70,6 +70,7 @@
     const foodAddButton = document.querySelector("#food-add-button");
     const foodMessage = document.querySelector("#food-message");
     const foodCanvas = document.querySelector("#food-wheel");
+    const foodSpinType = document.querySelector("#food-spin-type");
     const foodSpinButton = document.querySelector("#food-spin-button");
     const foodResetButton = document.querySelector("#food-reset-button");
     const foodResult = document.querySelector("#food-result");
@@ -956,20 +957,26 @@
         foodName.disabled = !foodApiReady || foodBusy;
         foodType.disabled = !foodApiReady || foodBusy;
         foodAddButton.disabled = !foodApiReady || foodBusy;
-        foodSpinButton.disabled = !foodApiReady || foodBusy || foodItems.length === 0;
+        foodSpinType.disabled = !foodApiReady || foodBusy;
+        foodSpinButton.disabled = !foodApiReady || foodBusy || getFoodsForSpinType().length === 0;
         foodResetButton.disabled = !foodApiReady || foodBusy || foodMenuItems.length === 0 ||
             (foodItems.length === foodMenuItems.length && foodItems.every((food, index) =>
                 food.type === foodMenuItems[index].type && food.name === foodMenuItems[index].name
             ));
     }
 
+    function getFoodsForSpinType() {
+        return foodItems.filter((food) => food.type === foodSpinType.value);
+    }
+
     function drawFoodWheel() {
         const context = foodCanvas.getContext("2d");
         const center = foodCanvas.width / 2;
         const radius = center - 3;
-        const sliceAngle = (Math.PI * 2) / Math.max(foodItems.length, 1);
+        const spinFoods = getFoodsForSpinType();
+        const sliceAngle = (Math.PI * 2) / Math.max(spinFoods.length, 1);
         context.clearRect(0, 0, foodCanvas.width, foodCanvas.height);
-        if (foodItems.length === 0) {
+        if (spinFoods.length === 0) {
             context.beginPath();
             context.arc(center, center, radius, 0, Math.PI * 2);
             context.fillStyle = "#edf2ef";
@@ -978,11 +985,11 @@
             context.font = "600 16px Segoe UI, sans-serif";
             context.textAlign = "center";
             context.textBaseline = "middle";
-            context.fillText("Thêm món ăn", center, center);
+            context.fillText(`Không còn ${foodTypes[foodSpinType.value].label.toLowerCase()}`, center, center);
             return;
         }
 
-        foodItems.forEach((food, index) => {
+        spinFoods.forEach((food, index) => {
             const startAngle = -Math.PI / 2 + index * sliceAngle;
             const endAngle = startAngle + sliceAngle;
             context.beginPath();
@@ -1000,7 +1007,7 @@
             context.translate(center, center);
             context.rotate(middleAngle);
             context.fillStyle = "#ffffff";
-            context.font = `${foodItems.length > 18 ? 9 : 12}px Segoe UI, sans-serif`;
+            context.font = `${spinFoods.length > 18 ? 9 : 12}px Segoe UI, sans-serif`;
             context.textAlign = "center";
             context.textBaseline = "middle";
             const label = `${foodTypes[food.type].label}: ${food.name}`;
@@ -1018,25 +1025,26 @@
             emptyMenu.textContent = "Chưa có món nào trong danh sách.";
             foodMenuList.append(emptyMenu);
         } else {
-            foodMenuItems.forEach((food) => appendFoodItem(foodMenuList, food));
+            foodMenuItems.forEach((food) => appendFoodItem(foodMenuList, food, true));
         }
 
+        const availableFoods = getFoodsForSpinType();
         foodList.replaceChildren();
-        foodCount.textContent = `(${foodItems.length})`;
-        if (!foodItems.length) {
+        foodCount.textContent = `(${availableFoods.length})`;
+        if (!availableFoods.length) {
             const emptyItem = document.createElement("li");
             emptyItem.className = "empty";
-            emptyItem.textContent = "Không còn món nào để quay. Hãy reset để chọn lại.";
+            emptyItem.textContent = `Không còn ${foodTypes[foodSpinType.value].label.toLowerCase()} để quay.`;
             foodList.append(emptyItem);
         } else {
-            foodItems.forEach((food) => appendFoodItem(foodList, food));
+            availableFoods.forEach((food) => appendFoodItem(foodList, food));
         }
         drawFoodWheel();
         updateFoodControls();
         renderFoodPlans();
     }
 
-    function appendFoodItem(list, food) {
+    function appendFoodItem(list, food, canDelete = false) {
         const item = document.createElement("li");
         const type = document.createElement("span");
         const name = document.createElement("span");
@@ -1044,6 +1052,19 @@
         type.textContent = foodTypes[food.type].label;
         name.textContent = food.name;
         item.append(type, name);
+        if (canDelete) {
+            const actions = document.createElement("div");
+            actions.className = "food-item-actions";
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "food-delete-button";
+            deleteButton.dataset.foodType = food.type;
+            deleteButton.dataset.foodName = food.name;
+            deleteButton.setAttribute("aria-label", `Xóa ${foodTypes[food.type].label}: ${food.name}`);
+            deleteButton.textContent = "Xóa";
+            actions.append(deleteButton);
+            item.append(actions);
+        }
         list.append(item);
     }
 
@@ -1113,6 +1134,19 @@
         const payload = await response.json();
         if (!response.ok) {
             throw new Error(payload.error || "Không khôi phục được danh sách món ăn");
+        }
+        return payload;
+    }
+
+    async function deleteFoodItem(food) {
+        const response = await fetch(`${API_BASE_URL}/api/foods/delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ food }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || "Không xóa được món ăn");
         }
         return payload;
     }
@@ -1433,6 +1467,41 @@
         }
     });
 
+    foodMenuList.addEventListener("click", async (event) => {
+        const button = event.target.closest(".food-delete-button");
+        if (!button || !foodApiReady || foodBusy) {
+            return;
+        }
+        const food = {
+            type: button.dataset.foodType,
+            name: button.dataset.foodName,
+        };
+        if (!window.confirm(`Xóa ${foodTypes[food.type].label}: ${food.name}? Lịch sử món đã quay sẽ được giữ lại.`)) {
+            return;
+        }
+        foodBusy = true;
+        updateFoodControls();
+        setFoodMessage("");
+        try {
+            const result = await deleteFoodItem(food);
+            foodMenuItems = result.menu;
+            foodItems = result.foods;
+            foodPlans = result.plans;
+            renderFoodList();
+            setFoodMessage(`Đã xóa ${foodTypes[food.type].label.toLowerCase()}: ${food.name}.`, "ok");
+        } catch (error) {
+            setFoodMessage(`Không xóa được món: ${error.message}`, "error");
+        } finally {
+            foodBusy = false;
+            updateFoodControls();
+        }
+    });
+
+    foodSpinType.addEventListener("change", () => {
+        renderFoodList();
+        foodResult.textContent = "";
+    });
+
     foodCanvas.addEventListener("transitionend", (event) => {
         if (event.propertyName === "transform") {
             finishFoodSpin();
@@ -1440,14 +1509,17 @@
     });
 
     foodSpinButton.addEventListener("click", () => {
-        if (!foodApiReady || foodBusy || !foodItems.length) {
+        const spinFoods = getFoodsForSpinType();
+        if (!foodApiReady || foodBusy || !spinFoods.length) {
             return;
         }
-        const selectedIndex = Math.floor(Math.random() * foodItems.length);
-        const sliceAngle = 360 / foodItems.length;
+        const selectedIndex = Math.floor(Math.random() * spinFoods.length);
+        const selectedFood = spinFoods[selectedIndex];
+        const fullListIndex = foodItems.indexOf(selectedFood);
+        const sliceAngle = 360 / spinFoods.length;
         const centerAngle = -90 + (selectedIndex + 0.5) * sliceAngle;
         const finalOffset = ((-90 - centerAngle) % 360 + 360) % 360;
-        spinningFoodIndex = selectedIndex;
+        spinningFoodIndex = fullListIndex;
         foodBusy = true;
         updateFoodControls();
         setFoodMessage("");
