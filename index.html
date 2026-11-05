@@ -164,7 +164,7 @@
                     <div class="food-wheel-area">
                         <label class="food-spin-type" for="food-spin-type">
                             Loại món muốn quay
-                            <select id="food-spin-type" disabled>
+                            <select id="food-spin-type">
                                 <option value="mặn">Món mặn</option>
                                 <option value="canh">Canh</option>
                                 <option value="rau">Rau</option>
@@ -188,7 +188,7 @@
                         <ul id="food-menu-list" class="food-list"></ul>
                     </div>
                     <div class="food-list-section">
-                        <h3>Món có thể quay <span id="food-count">(0)</span></h3>
+                        <h3><span id="food-available-title">Món có thể quay</span> <span id="food-count">(0)</span></h3>
                         <ul id="food-list" class="food-list"></ul>
                     </div>
                     <div class="food-history-section">
@@ -196,7 +196,10 @@
                         <ul id="food-plan-list" class="food-list"></ul>
                     </div>
                     <div class="food-history-section">
-                        <h3>Lịch sử món đã quay</h3>
+                        <label class="food-history-date" for="food-history-date">
+                            Xem món đã quay ngày
+                            <input id="food-history-date" type="date" />
+                        </label>
                         <ul id="food-history-list" class="food-list"></ul>
                     </div>
                 </div>

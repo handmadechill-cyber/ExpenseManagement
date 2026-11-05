@@ -263,6 +263,15 @@ button:disabled {
     width: 100%;
 }
 
+.food-history-date {
+    width: min(280px, 100%);
+    margin-bottom: 12px;
+}
+
+.food-history-date input {
+    width: 100%;
+}
+
 .food-wheel-frame {
     position: relative;
     width: min(420px, 100%);

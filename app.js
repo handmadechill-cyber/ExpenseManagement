@@ -78,8 +78,10 @@
     const foodMenuCount = document.querySelector("#food-menu-count");
     const foodList = document.querySelector("#food-list");
     const foodCount = document.querySelector("#food-count");
+    const foodAvailableTitle = document.querySelector("#food-available-title");
     const foodPlanDate = document.querySelector("#food-plan-date");
     const foodPlanList = document.querySelector("#food-plan-list");
+    const foodHistoryDate = document.querySelector("#food-history-date");
     const foodHistoryList = document.querySelector("#food-history-list");
     const entryRows = document.querySelector("#entry-rows");
     const spentCell = document.querySelector("#spent-cell");
@@ -957,7 +959,8 @@
         foodName.disabled = !foodApiReady || foodBusy;
         foodType.disabled = !foodApiReady || foodBusy;
         foodAddButton.disabled = !foodApiReady || foodBusy;
-        foodSpinType.disabled = !foodApiReady || foodBusy;
+        foodSpinType.disabled = foodBusy;
+        foodHistoryDate.disabled = foodBusy;
         foodSpinButton.disabled = !foodApiReady || foodBusy || getFoodsForSpinType().length === 0;
         foodResetButton.disabled = !foodApiReady || foodBusy || foodMenuItems.length === 0 ||
             (foodItems.length === foodMenuItems.length && foodItems.every((food, index) =>
@@ -974,6 +977,10 @@
         const center = foodCanvas.width / 2;
         const radius = center - 3;
         const spinFoods = getFoodsForSpinType();
+        foodCanvas.setAttribute(
+            "aria-label",
+            `Vòng quay ${foodTypes[foodSpinType.value].label.toLowerCase()}`
+        );
         const sliceAngle = (Math.PI * 2) / Math.max(spinFoods.length, 1);
         context.clearRect(0, 0, foodCanvas.width, foodCanvas.height);
         if (spinFoods.length === 0) {
@@ -1030,6 +1037,8 @@
 
         const availableFoods = getFoodsForSpinType();
         foodList.replaceChildren();
+        foodAvailableTitle.textContent =
+            `${foodTypes[foodSpinType.value].label} có thể quay`;
         foodCount.textContent = `(${availableFoods.length})`;
         if (!availableFoods.length) {
             const emptyItem = document.createElement("li");
@@ -1037,7 +1046,7 @@
             emptyItem.textContent = `Không còn ${foodTypes[foodSpinType.value].label.toLowerCase()} để quay.`;
             foodList.append(emptyItem);
         } else {
-            availableFoods.forEach((food) => appendFoodItem(foodList, food));
+            availableFoods.forEach((food) => appendFoodItem(foodList, food, true));
         }
         drawFoodWheel();
         updateFoodControls();
@@ -1101,15 +1110,16 @@
             foodPlanList.append(emptyPlan);
         }
 
-        const sortedPlans = [...foodPlans].sort((left, right) =>
-            right.date.localeCompare(left.date)
-        );
-        if (sortedPlans.length) {
-            sortedPlans.forEach((plan) => appendFoodPlanItem(foodHistoryList, plan, true));
+        const historyDate = foodHistoryDate.value;
+        const plansForDate = foodPlans.filter((plan) => plan.date === historyDate);
+        if (plansForDate.length) {
+            plansForDate.forEach((plan) => appendFoodPlanItem(foodHistoryList, plan, false));
         } else {
             const emptyHistory = document.createElement("li");
             emptyHistory.className = "empty";
-            emptyHistory.textContent = "Chưa có lịch sử món ăn.";
+            emptyHistory.textContent = historyDate
+                ? `Chưa có món nào được quay ngày ${formatFoodDate(historyDate)}.`
+                : "Chọn ngày để xem lịch sử món ăn.";
             foodHistoryList.append(emptyHistory);
         }
     }
@@ -1467,7 +1477,7 @@
         }
     });
 
-    foodMenuList.addEventListener("click", async (event) => {
+    async function handleFoodDeleteClick(event) {
         const button = event.target.closest(".food-delete-button");
         if (!button || !foodApiReady || foodBusy) {
             return;
@@ -1495,12 +1505,16 @@
             foodBusy = false;
             updateFoodControls();
         }
-    });
+    }
+
+    foodMenuList.addEventListener("click", handleFoodDeleteClick);
+    foodList.addEventListener("click", handleFoodDeleteClick);
 
     foodSpinType.addEventListener("change", () => {
         renderFoodList();
         foodResult.textContent = "";
     });
+    foodHistoryDate.addEventListener("change", renderFoodPlans);
 
     foodCanvas.addEventListener("transitionend", (event) => {
         if (event.propertyName === "transform") {
@@ -1672,6 +1686,7 @@
     const today = todayIso();
     entryDate.value = today;
     filterDate.value = today;
+    foodHistoryDate.value = addDays(today, -1);
     appControls.forEach((control) => {
         control.disabled = true;
     });
